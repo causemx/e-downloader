@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 
 from http.cookiejar import Cookie, CookieJar
 import urllib.request
@@ -16,22 +16,24 @@ import traceback
 import logging
 
 class GreatCookieJar(CookieJar):
+    '''Used to save cookies to a file; FileCookieJar is too high-end.'''
     def store(self, f):
         for cookie in self:
             f.write(repr(cookie))
             f.write('\n')
-        logging.info('Cookie saved.')
+        logging.debug('Cookie saved.')
 
     def restore(self, f):
         for line in f.readlines():
             self.set_cookie(eval(line))
-        logging.info('Cookie loaded.')
+        logging.debug('Cookie loaded.')
 
 def findElements(root, tag_name, pattern):
     elements = root.getElementsByTagName(tag_name)
     return [element for element in elements if pattern(element)]
 
 class Spider(object):
+    '''https://en.wikipedia.org/wiki/Spider'''
     def __init__(self, opener=None, timeout=10.0):
         self.open = opener.open if opener else urllib.request.urlopen
         self.timeout=timeout
@@ -67,6 +69,7 @@ class Spider(object):
             return True
 
     def open_parse(self, url):
+        '''return value: DOM'''
         while True:
             sleep(0.2)
             try:
@@ -90,11 +93,12 @@ class Spider(object):
         name_en = findElements(root, 'h1', lambda h1: h1.getAttribute('id') == 'gn')[0]
         name_en = name_en.childNodes[0].data
         name_jp = findElements(root, 'h1', lambda h1: h1.getAttribute('id') == 'gj')[0]
-        name_jp = name_jp.childNodes[0].data
+        name_jp = name_jp.childNodes[0].data if name_jp.childNodes else name_en
 
         return GalleryInfo(name_en=name_en, name_jp=name_jp)
 
     def get_page_urls(self, gallery_url):
+        '''Get the list of page urls of the given gallery.'''
         pages = []
         p = 0
         gallery_url += '/' if not gallery_url.endswith('/') else ''
@@ -155,6 +159,7 @@ class Spider(object):
                         reloadurl=reload_url)
 
 class Downloader(Thread):
+    '''Commander.'''
     def __init__(self, opener=None, timeout=10.0, max_thread=5):
         Thread.__init__(self)
 
@@ -196,11 +201,8 @@ class Downloader(Thread):
     def finished(self):
         return len(self.tasks) == 0 and len(self.threads) == 0
 
-    def join(self):
-        for thread in self.threads:
-            thread.join()
-
 class DownloadThread(Thread):
+    '''Worker.'''
     def __init__(self, gallery_info, page_info, opener=None, timeout=10.0):
         Thread.__init__(self)
 
@@ -247,6 +249,7 @@ class DownloadThread(Thread):
         except socket.timeout:
             logging.debug(traceback.format_exc())
         if not self.ok:
+            logging.info('Failed: {0}'.format(self.page_info.imgname))
             return
         buf.seek(0)
         copyfileobj(buf, open(file_path, 'wb'))
@@ -263,16 +266,17 @@ PageInfo = namedtuple('PageInfo', ['imgname', 'imgurl', 'originimg', 'reloadurl'
 GalleryInfo = namedtuple('GalleryInfo', ['name_en', 'name_jp'])
 
 def main(args):
+    # See our GreatCookieJar and Spider.
     cj = GreatCookieJar()
     if os.path.exists('cookie.txt'):
         cj.restore(open('cookie.txt', 'r'))
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
     spider = Spider(opener, timeout=4.0)
-
-    gallery_urls = None
+    # Ask user to enter arguments if it is not given by command line.
     if not args:
-        gallery_urls = input('Enter gallery url: ').split(';')
-    elif args[0] == 'login':
+        args = input('Arguments: ').split(' ')
+    
+    if args[0] == 'login':
         print('Logging in ... ', end='', flush=True)
         result = spider.login(args[1], args[2])
         cj.store(open('cookie.txt', 'w'))
@@ -281,28 +285,44 @@ def main(args):
         else:
             print('failed.')
             print(result)
+        if len(args) > 3:
+            gallery_urls = args[3:]
+        else:
+            gallery_urls = []
     else:
         gallery_urls = args[:]
+    # Now we are good to deal with given URLs.
+    for gallery_url in gallery_urls:
+        # Get GalleryInfo object and URLs needed for getting PageInfo objects.
+        page_urls = spider.get_page_urls(gallery_url)
+        gallery_info =spider.get_gallery_info(gallery_url)
+        downloader = Downloader(timeout=5.0)
+        downloader.start()
+        logging.info('Gallery: {0}'.format(gallery_info.name_jp))
+        
+        for _ in range(3):# We will keep trying for 3 times.
+            for page_url in page_urls:
+                page_info = spider.get_page_info(page_url)
+                if page_info.imgurl == 'http://ehgt.org/g/509.gif':
+                    logging.error('You have temporarily reached the limit for how many images you can browse.')
+                    continue
+                logging.debug('Get picture: {0}'.format(page_info.imgname))
+                downloader.new_download(gallery_info, page_info)
+            logging.debug('Waiting for DownloadThread ...')
+            while not downloader.finished:
+                 sleep(0.1)
+            if not downloader.failures:
+                break
+            # Some pictures failed downloading, so we will try again using new URLs.
+            page_urls = [page_info.reloadurl for gallery_info, page_info in downloader.failures]
 
-    if gallery_urls:
-        for gallery_url in gallery_urls:
-            page_urls = spider.get_page_urls(gallery_url)
-            gallery_info =spider.get_gallery_info(gallery_url)
-            downloader = Downloader(timeout=5.0)
-            downloader.start()
-            
-            for _ in range(3):
-                for page_url in page_urls:
-                    page_info = spider.get_page_info(page_url)
-                    downloader.new_download(gallery_info, page_info)
-                while not downloader.finished:
-                    sleep(0.1)
-                if not downloader.failures:
-                    break
-                page_url = [pageinfo.reloadurl for pageinfo in downloader.failures]
-            else:
-                logging.warn('Downloading gallery failed: {0}'.format(gallery_info.name_jp))
-                continue
+        logging.debug('Waiting for DownloadThread ...')
+        while not downloader.finished:
+            sleep(0.1)
+        downloader.stop()
+        if not downloader.failures:
+            logging.warn('Downloading gallery failed: {0}'.format(gallery_info.name_jp))
+        else:
             logging.warn('Gallery downloaded: {0}'.format(gallery_info.name_jp))
 
     cj.store(open('cookie.txt','w'))
@@ -311,6 +331,4 @@ if __name__ == '__main__':
     from sys import argv
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)-15s %(threadName)s %(message)s')
-
-    #main(argv[1:])
-    main(['http://exhentai.org/g/846606/9fd330d738/'])
+    main(argv[1:])
