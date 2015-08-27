@@ -10,7 +10,7 @@ from xml.parsers import expat
 from time import sleep, time
 from threading import Thread
 import os
-import io
+from io import BytesIO
 from shutil import copyfileobj
 import traceback
 import logging
@@ -89,13 +89,57 @@ class Spider(object):
     def get_gallery_info(self, gallery_url):
         document = self.open_parse(gallery_url)
         root = document.documentElement
+        html = document.toxml()
 
         name_en = findElements(root, 'h1', lambda h1: h1.getAttribute('id') == 'gn')[0]
         name_en = name_en.childNodes[0].data
         name_jp = findElements(root, 'h1', lambda h1: h1.getAttribute('id') == 'gj')[0]
         name_jp = name_jp.childNodes[0].data if name_jp.childNodes else name_en
 
-        return GalleryInfo(name_en=name_en, name_jp=name_jp)
+        category = findElements(root, 'img', lambda img: img.getAttribute('class') == 'ic')[0]
+        category = category.getAttribute('src').split('/')[-1]
+
+        uploader = findElements(root, 'div', lambda a: a.getAttribute('id') == 'gdn')[0]
+        uploader = uploader.childNodes[0].childNodes[0].data
+
+        gdt1s = findElements(root, 'td', lambda td: td.getAttribute('class') == 'gdt1')
+        gdt1s = [gdt1.childNodes[0].data for gdt1 in gdt1s]
+        gdt1s = [gdt1.lower().split(':')[0] for gdt1 in gdt1s]
+        gdt2s = findElements(root, 'td', lambda td: td.getAttribute('class') == 'gdt2')
+        gdt2s = [gdt2.childNodes[0] for gdt2 in gdt2s]
+        infos = dict(zip(gdt1s, gdt2s))
+        info_parent = infos['parent']
+        if info_parent.childNodes:
+            info_parent = info_parent.getAttribute('href')
+        else:
+            info_parent = info_parent.data
+        infos['parent'] = info_parent
+        infos['posted'] = infos['posted'].data
+        infos['visible'] = infos['visible'].data == 'Yes'
+        infos['language'] = infos['language'].data
+        infos['size'] = infos['file size'].data
+        del infos['file size']
+        infos['length'] = int(infos['length'].data.split(' ')[0])
+        infos['favorited'] = int(infos['favorited'].data.split(' ')[0])
+
+        translated = 'This gallery has been translated from the original language text.' in html
+        resized = 'This gallery has been resized for online viewing.' in html
+
+        rating = findElements(root, 'td', lambda td: td.getAttribute('id') == 'rating_label')[0]
+        rating = rating.childNodes[0].data.split(': ')[-1]
+        rating = float(rating)
+        rating_count = findElements(root, 'span', lambda span: span.getAttribute('id') == 'rating_count')[0]
+        rating_count = rating_count.childNodes[0].data
+
+        return GalleryInfo(name_en=name_en,
+                           name_jp=name_jp,
+                           category=category,
+                           uploader=uploader,
+                           infos=infos,
+                           translated=translated,
+                           resized=resized,
+                           rating=rating,
+                           rating_count=rating_count)
 
     def get_page_urls(self, gallery_url):
         '''Get the list of page urls of the given gallery.'''
@@ -230,7 +274,7 @@ class DownloadThread(Thread):
         
         self.ok = False
         logging.info('Start: {0}'.format(self.page_info.imgname))
-        buf = io.BytesIO()
+        buf = BytesIO()
         try:
             response = self.open(self.page_info.imgurl, timeout=self.timeout)
             self.length = response.getheader('Content-Length','-1')
@@ -263,7 +307,7 @@ class DownloadThread(Thread):
         return time() - self.begin
 
 PageInfo = namedtuple('PageInfo', ['imgname', 'imgurl', 'originimg', 'reloadurl'])
-GalleryInfo = namedtuple('GalleryInfo', ['name_en', 'name_jp'])
+GalleryInfo = namedtuple('GalleryInfo', ['name_en', 'name_jp', 'category', 'uploader', 'infos', 'rating', 'rating_count', 'translated', 'resized'])
 
 def main(args):
     # See our GreatCookieJar and Spider.
@@ -320,7 +364,7 @@ def main(args):
         while not downloader.finished:
             sleep(0.1)
         downloader.stop()
-        if not downloader.failures:
+        if downloader.failures:
             logging.warn('Downloading gallery failed: {0}'.format(gallery_info.name_jp))
         else:
             logging.warn('Gallery downloaded: {0}'.format(gallery_info.name_jp))
