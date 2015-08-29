@@ -409,6 +409,7 @@ def main(args):
                 break
             # Some pictures failed downloading, so we will try again using new URLs.
             page_urls = [page_info.reloadurl for gallery_info, page_info in downloader.failures]
+            downloader.failures.clear()
 
         logging.debug('Waiting for DownloadThread ...')
         while not downloader.finished:
