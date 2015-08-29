@@ -32,6 +32,13 @@ def findElements(root, tag_name, pattern):
     elements = root.getElementsByTagName(tag_name)
     return [element for element in elements if pattern(element)]
 
+def del_between(s, start_text, end_text):
+    if start_text not in s or end_text not in s:
+        return s
+    start = s.find(start_text)
+    end = s.find(end_text) + len(end_text)
+    return s[:start] + s[end:]
+
 class Spider(object):
     '''https://en.wikipedia.org/wiki/Spider'''
     def __init__(self, opener=None, timeout=10.0):
@@ -75,6 +82,16 @@ class Spider(object):
             try:
                 data = self.open(url, timeout=self.timeout).read()
                 html = data.decode()
+                if html.startswith('Your IP address'):
+                    logging.debug('IP address baned.')
+                    continue
+                while '<iframe' in html:
+                    html = del_between(html, '<iframe', '</iframe>')
+                while '<script' in html:
+                    html = del_between(html, '<script', '</script>')
+                while '<form' in html:
+                    html = del_between(html, '<form', '</form>')
+                html = del_between(html, '<div id="cdiv" class="gm">', '</div><!-- /cdiv -->')
                 document = parseString(html)
                 return document
             except OSError:
@@ -87,14 +104,25 @@ class Spider(object):
                 logging.debug(traceback.format_exc())
 
     def get_gallery_info(self, gallery_url):
+        gid = gallery_url.split('/')[-3]
+        token = gallery_url.split('/')[-2]
+
         document = self.open_parse(gallery_url)
         root = document.documentElement
         html = document.toxml()
 
+        if 'This gallery has been removed, and is unavailable.' in html:
+            return None
+        if 'Content Warning' in html:
+            return None
+
         name_en = findElements(root, 'h1', lambda h1: h1.getAttribute('id') == 'gn')[0]
         name_en = name_en.childNodes[0].data
         name_jp = findElements(root, 'h1', lambda h1: h1.getAttribute('id') == 'gj')[0]
-        name_jp = name_jp.childNodes[0].data if name_jp.childNodes else name_en
+        if name_jp.childNodes:
+            name_jp = name_jp.childNodes[0].data
+        else:
+            name_jp = name_en
 
         category = findElements(root, 'img', lambda img: img.getAttribute('class') == 'ic')[0]
         category = category.getAttribute('src').split('/')[-1]
@@ -131,7 +159,9 @@ class Spider(object):
         rating_count = findElements(root, 'span', lambda span: span.getAttribute('id') == 'rating_count')[0]
         rating_count = rating_count.childNodes[0].data
 
-        return GalleryInfo(name_en=name_en,
+        return GalleryInfo(gid=gid,
+                           token=token,
+                           name_en=name_en,
                            name_jp=name_jp,
                            category=category,
                            uploader=uploader,
@@ -139,7 +169,27 @@ class Spider(object):
                            translated=translated,
                            resized=resized,
                            rating=rating,
-                           rating_count=rating_count)
+                           rating_count=rating_count,
+                           tags=self.parse_tag(document))
+
+    def parse_tag(self, dom):
+        root = dom.documentElement
+        tag_map = {}
+        tags = findElements(root, 'div', lambda div: div.getAttribute('class') == 'gt')
+        for tag in tags:
+            tag = tag.getAttribute('id')[3:]
+            if ':' in tag:
+                category, name = tag.split(':')
+            else:
+                category = 'misc'
+                name = tag
+            if category in tag_map:
+                tag_map[category].append(name)
+            else:
+                tag_map[category] = [name]
+        return tag_map
+
+
 
     def get_page_urls(self, gallery_url):
         '''Get the list of page urls of the given gallery.'''
@@ -307,7 +357,7 @@ class DownloadThread(Thread):
         return time() - self.begin
 
 PageInfo = namedtuple('PageInfo', ['imgname', 'imgurl', 'originimg', 'reloadurl'])
-GalleryInfo = namedtuple('GalleryInfo', ['name_en', 'name_jp', 'category', 'uploader', 'infos', 'rating', 'rating_count', 'translated', 'resized'])
+GalleryInfo = namedtuple('GalleryInfo', ['gid', 'token', 'name_en', 'name_jp', 'category', 'uploader', 'infos', 'rating', 'rating_count', 'translated', 'resized', 'tags'])
 
 def main(args):
     # See our GreatCookieJar and Spider.
