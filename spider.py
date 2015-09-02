@@ -390,7 +390,7 @@ def main(args):
         # Get GalleryInfo object and URLs needed for getting PageInfo objects.
         page_urls = spider.get_page_urls(gallery_url)
         gallery_info =spider.get_gallery_info(gallery_url)
-        downloader = Downloader(timeout=5.0)
+        downloader = Downloader(timeout=5.0, max_thread=10)
         downloader.start()
         logging.info('Gallery: {0}'.format(gallery_info.name_jp))
         
