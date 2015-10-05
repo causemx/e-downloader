@@ -9,11 +9,10 @@ from collections import namedtuple
 from xml.parsers import expat
 from time import sleep, time
 from threading import Thread
-import os
-from io import BytesIO
-from shutil import copyfileobj
 import traceback
 import logging
+
+from downloader import Downloader
 
 class GreatCookieJar(CookieJar):
     '''Used to save cookies to a file; FileCookieJar is too high-end.'''
@@ -28,24 +27,53 @@ class GreatCookieJar(CookieJar):
             self.set_cookie(eval(line))
         logging.debug('Cookie loaded.')
 
-def findElements(root, tag_name, pattern):
+def findElements(root, tag_name: str, pattern: str):
+    '''
+    Find elements whose tag name is tag_name and pattern(element) is True.
+    '''
     elements = root.getElementsByTagName(tag_name)
     return [element for element in elements if pattern(element)]
 
-def del_between(s, start_text, end_text):
+def del_between(s: str, start_text: str, end_text: str) -> str:
+    '''
+    Delete the substring starting with start_text and ending with end_text.
+    '''
     if start_text not in s or end_text not in s:
         return s
     start = s.find(start_text)
     end = s.find(end_text) + len(end_text)
     return s[:start] + s[end:]
 
+# Information of a gallery page.
+PageInfo = namedtuple('PageInfo', ['imgname', 'imgurl', 'originimg', 'reloadurl'])
+# Information of a gallery
+GalleryInfo = namedtuple('GalleryInfo',
+                         [
+                             'gid',
+                             'token',
+                             'name_en',
+                             'name_jp',
+                             'category',
+                             'uploader',
+                             'infos',
+                             'rating',
+                             'rating_count',
+                             'translated',
+                             'resized',
+                             'tags'
+                         ])
+
 class Spider(object):
-    '''https://en.wikipedia.org/wiki/Spider'''
+    '''Get information from e-hentai.'''
     def __init__(self, opener=None, timeout=10.0):
         self.open = opener.open if opener else urllib.request.urlopen
         self.timeout=timeout
 
-    def login(self, username, password):
+    def login(self, username: str, password: str) -> None:
+        '''
+        Login to get the cookie we need to access exhentai.org.
+        Warning: HTTPS is not used.
+        '''
         base_url = 'http://forums.e-hentai.org/index.php?act=Login&CODE=01'
         post_data = {'CookieDate' : 1,
                      'b' : 'd',
@@ -75,7 +103,7 @@ class Spider(object):
         else:
             return True
 
-    def open_parse(self, url):
+    def open_parse(self, url: str):
         '''return value: DOM'''
         while True:
             sleep(0.2)
@@ -85,6 +113,7 @@ class Spider(object):
                 if html.startswith('Your IP address'):
                     logging.debug('IP address baned.')
                     continue
+                # We need to remove useless part of the html
                 while '<iframe' in html:
                     html = del_between(html, '<iframe', '</iframe>')
                 while '<script' in html:
@@ -103,7 +132,10 @@ class Spider(object):
             except expat.ExpatError:
                 logging.debug(traceback.format_exc())
 
-    def get_gallery_info(self, gallery_url):
+    def get_gallery_info(self, gallery_url: str) -> GalleryInfo:
+        '''Get the GalleryInfo object from by given url.'''
+        # gallery url: http://g.e-hentai.org/g/gid/token/[?p=xxx]
+        gallery_url = gallery_url.split('?')[0]
         gid = gallery_url.split('/')[-3]
         token = gallery_url.split('/')[-2]
 
@@ -172,7 +204,7 @@ class Spider(object):
                            rating_count=rating_count,
                            tags=self.parse_tag(document))
 
-    def parse_tag(self, dom):
+    def parse_tag(self, dom) -> dict:
         root = dom.documentElement
         tag_map = {}
         tags = findElements(root, 'div', lambda div: div.getAttribute('class') == 'gt')
@@ -189,9 +221,7 @@ class Spider(object):
                 tag_map[category] = [name]
         return tag_map
 
-
-
-    def get_page_urls(self, gallery_url):
+    def get_page_urls(self, gallery_url:str) -> list:
         '''Get the list of page urls of the given gallery.'''
         pages = []
         p = 0
@@ -222,7 +252,10 @@ class Spider(object):
             p += 1
         return pages
 
-    def get_page_info(self, page_url):
+    def get_page_info(self, page_url: str) -> PageInfo:
+        '''Get the PageInfo object by the given url.'''
+        # page url: http://g.e-hentai.org/s/imgkey/gid-page/[?nl=xxx[&nl=xxx[...]]]
+
         document = self.open_parse(page_url)
         root = document.documentElement
         
@@ -252,178 +285,3 @@ class Spider(object):
                         originimg=origin_url,
                         reloadurl=reload_url)
 
-class Downloader(Thread):
-    '''Commander.'''
-    def __init__(self, opener=None, timeout=10.0, max_thread=5):
-        Thread.__init__(self)
-
-        self.opener = opener
-        self.timeout = timeout
-        self.max_thread = max_thread
-        self.tasks = []
-        self.failures = []
-        self.threads = []
-        self.working = False
-
-    def new_download(self, gallery_info, page_info):
-        self.tasks.append((gallery_info, page_info))
-
-    def run(self):
-        self.working = True
-        while self.working:
-            sleep(0.05)
-            for i in range(len(self.threads)):
-                thread = self.threads[i]
-                if not thread.isAlive():
-                    del self.threads[i]
-                    if not thread.ok:
-                        self.failures.append((thread.gallery_info, thread.page_info))
-                    logging.debug('Thread exited: {0}'.format(thread.ident))
-                    break
-            if len(self.threads) < self.max_thread and self.tasks:
-                gallery_info, page_info = self.tasks[0]
-                del self.tasks[0]
-                thread = DownloadThread(gallery_info, page_info, self.opener, self.timeout)
-                thread.start()
-                self.threads.append(thread)
-                logging.debug('Starting new thread: {0}'.format(thread.ident))
-
-    def stop(self):
-        self.working = False
-
-    @property
-    def finished(self):
-        return len(self.tasks) == 0 and len(self.threads) == 0
-
-class DownloadThread(Thread):
-    '''Worker.'''
-    def __init__(self, gallery_info, page_info, opener=None, timeout=10.0):
-        Thread.__init__(self)
-
-        self.gallery_info = gallery_info
-        self.page_info = page_info
-        self.open = opener.open if opener else urllib.request.urlopen
-        self.timeout = timeout
-        self.begin = time()
-        self.ok = None
-        self.working = False
-        self.bytesread = 0
-        self.length = -1
-
-    def run(self):
-        self.working = True
-
-        dir_path = self.gallery_info.name_jp
-        if not os.path.exists(dir_path):
-            os.mkdir(dir_path)
-        file_path = dir_path + os.sep + self.page_info.imgname
-        if os.path.exists(file_path):
-            logging.info('Skip: {0}'.format(self.page_info.imgname))
-            self.ok = True
-            return
-        
-        self.ok = False
-        logging.info('Start: {0}'.format(self.page_info.imgname))
-        buf = BytesIO()
-        try:
-            response = self.open(self.page_info.imgurl, timeout=self.timeout)
-            self.length = response.getheader('Content-Length','-1')
-            self.length = int(self.length)
-            while self.working:
-                data = response.read(512)
-                if not data:
-                    self.ok = True
-                    break
-                buf.write(data)
-                self.bytesread += len(data)
-        except OSError:
-            logging.debug(traceback.format_exc())
-        except HTTPException:
-            logging.debug(traceback.format_exc())
-        except socket.timeout:
-            logging.debug(traceback.format_exc())
-        if not self.ok:
-            logging.info('Failed: {0}'.format(self.page_info.imgname))
-            return
-        buf.seek(0)
-        copyfileobj(buf, open(file_path, 'wb'))
-        logging.info('Finish: {0}'.format(self.page_info.imgname))
-
-    def stop(self):
-        self.working = False
-
-    @property
-    def second_lapsed(self):
-        return time() - self.begin
-
-PageInfo = namedtuple('PageInfo', ['imgname', 'imgurl', 'originimg', 'reloadurl'])
-GalleryInfo = namedtuple('GalleryInfo', ['gid', 'token', 'name_en', 'name_jp', 'category', 'uploader', 'infos', 'rating', 'rating_count', 'translated', 'resized', 'tags'])
-
-def main(args):
-    # See our GreatCookieJar and Spider.
-    cj = GreatCookieJar()
-    if os.path.exists('cookie.txt'):
-        cj.restore(open('cookie.txt', 'r'))
-    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
-    spider = Spider(opener, timeout=4.0)
-    # Ask user to enter arguments if it is not given by command line.
-    if not args:
-        args = input('Arguments: ').split(' ')
-    
-    if args[0] == 'login':
-        print('Logging in ... ', end='', flush=True)
-        result = spider.login(args[1], args[2])
-        cj.store(open('cookie.txt', 'w'))
-        if not result:
-            print('done.')
-        else:
-            print('failed.')
-            print(result)
-        if len(args) > 3:
-            gallery_urls = args[3:]
-        else:
-            gallery_urls = []
-    else:
-        gallery_urls = args[:]
-    # Now we are good to deal with given URLs.
-    for gallery_url in gallery_urls:
-        # Get GalleryInfo object and URLs needed for getting PageInfo objects.
-        page_urls = spider.get_page_urls(gallery_url)
-        gallery_info =spider.get_gallery_info(gallery_url)
-        downloader = Downloader(timeout=5.0, max_thread=10)
-        downloader.start()
-        logging.info('Gallery: {0}'.format(gallery_info.name_jp))
-        
-        for _ in range(3):# We will keep trying for 3 times.
-            for page_url in page_urls:
-                page_info = spider.get_page_info(page_url)
-                if page_info.imgurl == 'http://ehgt.org/g/509.gif':
-                    logging.error('You have temporarily reached the limit for how many images you can browse.')
-                    continue
-                logging.debug('Get picture: {0}'.format(page_info.imgname))
-                downloader.new_download(gallery_info, page_info)
-            logging.debug('Waiting for DownloadThread ...')
-            while not downloader.finished:
-                 sleep(0.1)
-            if not downloader.failures:
-                break
-            # Some pictures failed downloading, so we will try again using new URLs.
-            page_urls = [page_info.reloadurl for gallery_info, page_info in downloader.failures]
-            downloader.failures.clear()
-
-        logging.debug('Waiting for DownloadThread ...')
-        while not downloader.finished:
-            sleep(0.1)
-        downloader.stop()
-        if downloader.failures:
-            logging.warn('Downloading gallery failed: {0}'.format(gallery_info.name_jp))
-        else:
-            logging.warn('Gallery downloaded: {0}'.format(gallery_info.name_jp))
-
-    cj.store(open('cookie.txt','w'))
-
-if __name__ == '__main__':
-    from sys import argv
-    logging.basicConfig(level=logging.INFO,
-                        format='%(asctime)-15s %(threadName)s %(message)s')
-    main(argv[1:])
