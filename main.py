@@ -73,5 +73,4 @@ def main(args):
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)-15s %(threadName)s %(message)s')
-    #main(argv[1:])
-    main(['http://exhentai.org/g/860020/e07c3a2e4f/'])
+    main(argv[1:])
