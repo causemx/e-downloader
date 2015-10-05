@@ -20,12 +20,10 @@ class GreatCookieJar(CookieJar):
         for cookie in self:
             f.write(repr(cookie))
             f.write('\n')
-        logging.debug('Cookie saved.')
 
     def restore(self, f):
         for line in f.readlines():
             self.set_cookie(eval(line))
-        logging.debug('Cookie loaded.')
 
 def findElements(root, tag_name: str, pattern: str):
     '''
@@ -221,7 +219,7 @@ class Spider(object):
                 tag_map[category] = [name]
         return tag_map
 
-    def get_page_urls(self, gallery_url:str) -> list:
+    def get_page_urls(self, gallery_url: str) -> list:
         '''Get the list of page urls of the given gallery.'''
         pages = []
         p = 0

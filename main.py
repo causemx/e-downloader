@@ -13,6 +13,7 @@ def main(args):
     cj = GreatCookieJar()
     if os.path.exists('cookie.txt'):
         cj.restore(open('cookie.txt', 'r'))
+        logging.info('Cookie loaded.')
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
     spider = Spider(opener, timeout=4.0)
     # Ask user to enter arguments if it is not given by command line.
@@ -72,4 +73,5 @@ def main(args):
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)-15s %(threadName)s %(message)s')
-    main(argv[1:])
+    #main(argv[1:])
+    main(['http://exhentai.org/g/860020/e07c3a2e4f/'])
