@@ -8,12 +8,14 @@ from sys import argv
 import logging
 import os
 
+logger = logging.getLogger('e-spider.main')
+
 def main(args):
     # See our GreatCookieJar and Spider.
     cj = GreatCookieJar()
     if os.path.exists('cookie.txt'):
         cj.restore(open('cookie.txt', 'r'))
-        logging.info('Cookie loaded.')
+        logger.info('Cookie loaded.')
     spider = Spider(timeout=4.0,
                     cookies=cj,
                     headers={'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:41.0) Gecko/20100101 Firefox/41.0'},
@@ -44,17 +46,17 @@ def main(args):
         gallery_info =spider.get_gallery_info(gallery_url)
         downloader = Downloader(timeout=5.0, max_thread=10)
         downloader.start()
-        logging.info('Gallery: {0}'.format(gallery_info.name_jp))
+        logger.info('Gallery: {0}'.format(gallery_info.name_jp))
         # Keep trying until all the pictures are downloaded.
         while page_urls:
             for page_url in page_urls:
                 page_info = spider.get_page_info(page_url)
                 if page_info.img_url == 'http://ehgt.org/g/509.gif':
-                    logging.error('You have temporarily reached the limit for how many images you can browse.')
+                    logger.error('You have temporarily reached the limit for how many images you can browse.')
                     continue
-                logging.debug('Get picture: {0}'.format(page_info.img_name))
+                logger.debug('Get picture: {0}'.format(page_info.img_name))
                 downloader.new_download((gallery_info, page_info))
-            logging.debug('Waiting for DownloadThread ...')
+            logger.debug('Waiting for DownloadThread ...')
             while not downloader.finished:
                  sleep(0.1)
             if not downloader.failures:
@@ -64,15 +66,21 @@ def main(args):
             # downloader.failures.clear()
             del downloader.failures[:]
 
-        logging.debug('Waiting for DownloadThread ...')
+        logger.debug('Waiting for DownloadThread ...')
         while not downloader.finished:
             sleep(0.1)
         downloader.stop()
-        logging.info('Gallery downloaded: {0}'.format(gallery_info.name_jp))
+        logger.info('Gallery downloaded: {0}'.format(gallery_info.name_jp))
     # Save cookies.
     cj.store(open('cookie.txt','w'))
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO,
-                        format='%(asctime)-15s %(threadName)s %(message)s')
+    root_logger = logging.getLogger('e-spider')
+    root_logger.setLevel(logging.INFO)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+
+    formatter = logging.Formatter('%(asctime)-15s %(threadName)s %(message)s')
+    ch.setFormatter(formatter)
+    root_logger.addHandler(ch)
     main(argv[1:])

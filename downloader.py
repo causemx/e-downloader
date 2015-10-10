@@ -3,11 +3,13 @@ from time import sleep, time
 from threading import Thread
 from http.client import HTTPException
 import logging
+logger = logging.getLogger('e-spider.downloader')
 import traceback
 from io import BytesIO
 from shutil import copyfileobj
 import socket
 import urllib
+
 
 class Downloader(Thread):
     '''Commander.'''
@@ -37,7 +39,7 @@ class Downloader(Thread):
                     del self.threads[i]
                     if not thread.ok:
                         self.failures.append((thread.gallery_info, thread.page_info))
-                    logging.debug('Thread exited: {0}'.format(thread.ident))
+                    logger.debug('Thread exited: {0}'.format(thread.ident))
                     break
             # Create a new thread if possible
             if len(self.threads) < self.max_thread and self.tasks:
@@ -46,7 +48,7 @@ class Downloader(Thread):
                 thread = DownloadThread(task, self.opener, self.timeout)
                 thread.start()
                 self.threads.append(thread)
-                logging.debug('Starting new thread: {0}'.format(thread.ident))
+                logger.debug('Starting new thread: {0}'.format(thread.ident))
 
     def stop(self):
         self.working = False
@@ -82,12 +84,12 @@ class DownloadThread(Thread):
             os.mkdir(dir_path)
         file_path = dir_path + os.sep + self.page_info.img_name
         if os.path.exists(file_path):
-            logging.info('Skip: {0}'.format(self.page_info.img_name))
+            logger.info('Skip: {0}'.format(self.page_info.img_name))
             self.ok = True
             return
         
         self.ok = False
-        logging.info('Start: {0}'.format(self.page_info.img_name))
+        logger.info('Start: {0}'.format(self.page_info.img_name))
         buf = BytesIO()
         try:
             response = self.open(self.page_info.img_url, timeout=self.timeout)
@@ -101,18 +103,18 @@ class DownloadThread(Thread):
                 buf.write(data)
                 self.bytesread += len(data)
         except OSError:
-            logging.debug(traceback.format_exc())
+            logger.debug(traceback.format_exc())
         except HTTPException:
-            logging.debug(traceback.format_exc())
+            logger.debug(traceback.format_exc())
         except socket.timeout:
-            logging.debug(traceback.format_exc())
+            logger.debug(traceback.format_exc())
         if not self.ok:
-            logging.info('Failed: {0}'.format(self.page_info.img_name))
+            logger.info('Failed: {0}'.format(self.page_info.img_name))
             return
         # Save the file to the disk.
         buf.seek(0)
         copyfileobj(buf, open(file_path, 'wb'))
-        logging.info('Finish: {0}'.format(self.page_info.img_name))
+        logger.info('Finish: {0}'.format(self.page_info.img_name))
 
     def stop(self):
         self.working = False

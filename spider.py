@@ -3,6 +3,7 @@ from collections import namedtuple
 from time import sleep, time
 import traceback
 import logging
+logger = logging.getLogger('e-spider.spider')
 
 import requests
 from pyquery import PyQuery
