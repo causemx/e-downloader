@@ -19,7 +19,7 @@ def main(args):
     spider = Spider(timeout=4.0,
                     cookies=cj,
                     headers={'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:41.0) Gecko/20100101 Firefox/41.0'},
-                    proxies={'http': 'http://192.168.0.13:8087/'})
+                    proxies=None)
     # Ask user to enter arguments if it is not given by command line.
     if not args:
         args = input('Arguments: ').split(' ')
