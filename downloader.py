@@ -22,9 +22,9 @@ class Downloader(Thread):
         self.threads = []
         self.working = False
 
-    def new_download(self, gallery_info, page_info):
+    def new_download(self, task):
         '''Add a new download'''
-        self.tasks.append((gallery_info, page_info))
+        self.tasks.append(task)
 
     def run(self):
         self.working = True
@@ -41,9 +41,9 @@ class Downloader(Thread):
                     break
             # Create a new thread if possible
             if len(self.threads) < self.max_thread and self.tasks:
-                gallery_info, page_info = self.tasks[0]
+                task = self.tasks[0]
                 del self.tasks[0]
-                thread = DownloadThread(gallery_info, page_info, self.opener, self.timeout)
+                thread = DownloadThread(task, self.opener, self.timeout)
                 thread.start()
                 self.threads.append(thread)
                 logging.debug('Starting new thread: {0}'.format(thread.ident))
@@ -60,11 +60,10 @@ class DownloadThread(Thread):
     '''Worker.'''
     translate_map = str.maketrans('/', '／')
 
-    def __init__(self, gallery_info, page_info, opener=None, timeout=10.0):
+    def __init__(self, task, opener=None, timeout=10.0):
         Thread.__init__(self)
 
-        self.gallery_info = gallery_info
-        self.page_info = page_info
+        self.gallery_info, self.page_info = task
         self.open = opener.open if opener else urllib.request.urlopen
         self.timeout = timeout
         self.begin = time()
@@ -81,17 +80,17 @@ class DownloadThread(Thread):
         dir_path = dir_path.translate(self.translate_map)
         if not os.path.exists(dir_path):
             os.mkdir(dir_path)
-        file_path = dir_path + os.sep + self.page_info.imgname
+        file_path = dir_path + os.sep + self.page_info.img_name
         if os.path.exists(file_path):
-            logging.info('Skip: {0}'.format(self.page_info.imgname))
+            logging.info('Skip: {0}'.format(self.page_info.img_name))
             self.ok = True
             return
         
         self.ok = False
-        logging.info('Start: {0}'.format(self.page_info.imgname))
+        logging.info('Start: {0}'.format(self.page_info.img_name))
         buf = BytesIO()
         try:
-            response = self.open(self.page_info.imgurl, timeout=self.timeout)
+            response = self.open(self.page_info.img_url, timeout=self.timeout)
             self.length = response.getheader('Content-Length','-1')
             self.length = int(self.length)
             while self.working:
@@ -108,12 +107,12 @@ class DownloadThread(Thread):
         except socket.timeout:
             logging.debug(traceback.format_exc())
         if not self.ok:
-            logging.info('Failed: {0}'.format(self.page_info.imgname))
+            logging.info('Failed: {0}'.format(self.page_info.img_name))
             return
         # Save the file to the disk.
         buf.seek(0)
         copyfileobj(buf, open(file_path, 'wb'))
-        logging.info('Finish: {0}'.format(self.page_info.imgname))
+        logging.info('Finish: {0}'.format(self.page_info.img_name))
 
     def stop(self):
         self.working = False
