@@ -11,7 +11,7 @@ import os
 logger = logging.getLogger('e-spider.main')
 
 def main(args):
-    # See our GreatCookieJar and Spider.
+    # see our GreatCookieJar and Spider
     cj = GreatCookieJar()
     if os.path.exists('cookie.txt'):
         cj.restore(open('cookie.txt', 'r'))
@@ -20,7 +20,7 @@ def main(args):
                     cookies=cj,
                     headers={'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:41.0) Gecko/20100101 Firefox/41.0'},
                     proxies=None)
-    # Ask user to enter arguments if it is not given by command line.
+    # ask user to enter arguments if it is not given by command line
     if not args:
         args = input('Arguments: ').split(' ')
     
@@ -39,16 +39,16 @@ def main(args):
             gallery_urls = []
     else:
         gallery_urls = args[:]
-    # Now we are good to deal with given URLs.
+    # now we are good to deal with given URLs
     for gallery_url in gallery_urls:
-        # Get GalleryInfo object and URLs needed for getting PageInfo objects.
+        # get GalleryInfo object and URLs needed for getting PageInfo objects
         gallery_info =spider.get_gallery_info(gallery_url)
         logger.info('Get gallery: {0}'.format(gallery_info.name_jp))
         page_urls = spider.get_page_urls(gallery_url)
         downloader = Downloader(timeout=5.0, max_thread=10)
         downloader.start()
         logger.info('Start gallery: {0}'.format(gallery_info.name_jp))
-        # Keep trying until all the pictures are downloaded.
+        # keep trying until all the pictures are downloaded
         while page_urls:
             for page_url in page_urls:
                 page_info = spider.get_page_info(page_url)
@@ -62,20 +62,20 @@ def main(args):
                  sleep(0.1)
             if not downloader.failures:
                 break
-            # Some pictures failed downloading, so we will try again using new URLs.
+            # some pictures failed downloading, so we will try again using new URLs
             page_urls = [page_info.reload_url for gallery_info, page_info in downloader.failures]
-            # downloader.failures.clear()
-            del downloader.failures[:]
+            downloader.failures.clear()
 
         logger.debug('Waiting for DownloadThread ...')
         while not downloader.finished:
             sleep(0.1)
         downloader.stop()
         logger.info('Gallery downloaded: {0}'.format(gallery_info.name_jp))
-    # Save cookies.
+    # save cookies
     cj.store(open('cookie.txt','w'))
 
 if __name__ == '__main__':
+    # setup logger
     module_logger = logging.getLogger('e-spider')
     module_logger.setLevel(logging.DEBUG)
     ch = logging.StreamHandler()
@@ -84,4 +84,6 @@ if __name__ == '__main__':
     formatter = logging.Formatter('%(asctime)-15s %(threadName)s %(levelname)s - %(message)s')
     ch.setFormatter(formatter)
     module_logger.addHandler(ch)
+    # call main
     main(argv[1:])
+
