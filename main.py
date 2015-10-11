@@ -42,11 +42,12 @@ def main(args):
     # Now we are good to deal with given URLs.
     for gallery_url in gallery_urls:
         # Get GalleryInfo object and URLs needed for getting PageInfo objects.
-        page_urls = spider.get_page_urls(gallery_url)
         gallery_info =spider.get_gallery_info(gallery_url)
+        logger.info('Get gallery: {0}'.format(gallery_info.name_jp))
+        page_urls = spider.get_page_urls(gallery_url)
         downloader = Downloader(timeout=5.0, max_thread=10)
         downloader.start()
-        logger.info('Gallery: {0}'.format(gallery_info.name_jp))
+        logger.info('Start gallery: {0}'.format(gallery_info.name_jp))
         # Keep trying until all the pictures are downloaded.
         while page_urls:
             for page_url in page_urls:
@@ -75,12 +76,12 @@ def main(args):
     cj.store(open('cookie.txt','w'))
 
 if __name__ == '__main__':
-    root_logger = logging.getLogger('e-spider')
-    root_logger.setLevel(logging.INFO)
+    module_logger = logging.getLogger('e-spider')
+    module_logger.setLevel(logging.DEBUG)
     ch = logging.StreamHandler()
     ch.setLevel(logging.INFO)
 
-    formatter = logging.Formatter('%(asctime)-15s %(threadName)s %(message)s')
+    formatter = logging.Formatter('%(asctime)-15s %(threadName)s %(levelname)s - %(message)s')
     ch.setFormatter(formatter)
-    root_logger.addHandler(ch)
+    module_logger.addHandler(ch)
     main(argv[1:])

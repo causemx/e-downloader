@@ -102,11 +102,11 @@ class Spider(Requester):
                 response = self.get(url)
                 html = response.text
                 if html.startswith('Your IP address'):
-                    logging.error('IP address baned.')
+                    logger.error('IP address baned.')
                     continue
                 break
             except requests.RequestException:
-                logging.debug(traceback.format_exc())
+                logger.debug(traceback.format_exc())
                 continue
         query = PyQuery(html)
         return query
@@ -175,6 +175,7 @@ class Spider(Requester):
             gpc = query('.gpc')[0].text.split(' ')
             current_page = gpc[3]
             all_pages = gpc[5]
+            logger.debug('Gallery page get: ' + url)
 
             for page_link in query('div.gdtm > div:nth-child(1) > a:nth-child(1)'):
                 pages.append(page_link.attrib['href'])
@@ -204,7 +205,7 @@ class Spider(Requester):
 
         try:
             origin_url = query('#i7 > a:nth-child(2)')[0].attrib['href']
-        except KeyError:
+        except IndexError:
             origin_url = None
 
         return PageInfo(img_name=img_name,
