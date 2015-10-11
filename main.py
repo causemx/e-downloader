@@ -28,11 +28,7 @@ def main(args):
         print('Logging in ... ', end='', flush=True)
         result = spider.login(args[1], args[2])
         cj.store(open('cookie.txt', 'w'))
-        if not result:
-            print('done.')
-        else:
-            print('failed.')
-            print(result)
+        print('done.' if result else 'failed,')
         if len(args) > 3:
             gallery_urls = args[3:]
         else:

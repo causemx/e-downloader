@@ -1,11 +1,11 @@
-﻿from http.cookiejar import Cookie, CookieJar
-from collections import namedtuple
+﻿from collections import namedtuple
 from time import sleep, time
 import traceback
 import logging
 logger = logging.getLogger('e-spider.spider')
 
 import requests
+from requests.cookies import RequestsCookieJar
 from pyquery import PyQuery
 
 # for type hint ...
@@ -13,7 +13,7 @@ from io import FileIO
 import lxml
 HtmlElement = lxml.html.HtmlElement
 
-class GreatCookieJar(CookieJar):
+class GreatCookieJar(RequestsCookieJar):
     '''Used to save cookies to a file; FileCookieJar is too high-end.'''
     def store(self, f: FileIO) -> None:
         for cookie in self:
@@ -21,6 +21,7 @@ class GreatCookieJar(CookieJar):
             f.write('\n')
 
     def restore(self, f: FileIO) -> None:
+        from http.cookiejar import Cookie
         for line in f.readlines():
             self.set_cookie(eval(line))
 
@@ -46,7 +47,7 @@ GalleryInfo = namedtuple('GalleryInfo',
 
 class Requester(object):
     '''A class that makes HTTP requests'''
-    def __init__(self, timeout=10, proxies=None, cookies=None, headers=None):
+    def __init__(self, timeout=10, proxies=None, cookies=None, headers=None) -> None:
         self.timeout = timeout
         self.proxies = proxies
         self.cookies = cookies if cookies else GreatCookieJar()
@@ -59,6 +60,7 @@ class Requester(object):
                                 cookies=self.cookies,
                                 headers=self.headers,
                                 **kwargs)
+        self.cookies.update(response.cookies)
         return response
 
     def post(self, url: str, **kwargs) -> requests.Response:
@@ -68,6 +70,7 @@ class Requester(object):
                                  cookies=self.cookies,
                                  headers=self.headers,
                                  **kwargs)
+        self.cookies.update(response.cookies)
         return response
 
 
@@ -76,16 +79,16 @@ class Spider(Requester):
     def login(self, username: str, password: str) -> bool:
         '''Login to get the cookies we need to access exhentai.org.'''
         base_url = 'https://forums.e-hentai.org/index.php'
-        payload = {'act': 'Login',
-                   'CODE': '01',
-                   'CookieDate' : 1,
-                   'b' : 'd',
-                   'bt' : '',
-                   'UserName' : username,
-                   'PassWord' : password,
-                   'ipb_login_submit' : 'Login!'}
-        response = self.post(base_url, params=payload)
+        params = {'act': 'Login', 'CODE': '01'}
+        data = {'CookieDate' : 1,
+                'b' : 'd',
+                'bt' : '',
+                'UserName' : username,
+                'PassWord' : password,
+                'ipb_login_submit' : 'Login!'}
+        response = self.post(base_url, params=params, data=data)
         html = response.text
+        open('1.html', 'w').write(html)
         if 'You are now logged in as:' in html:
             return True
         else:
