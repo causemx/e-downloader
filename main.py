@@ -2,7 +2,7 @@
 
 from spider import GreatCookieJar
 from spider import Spider
-from downloader import Downloader
+from downloader import DownloadManager
 from time import sleep
 from sys import argv
 import logging
@@ -45,7 +45,7 @@ def main(args):
         gallery_info =spider.get_gallery_info(gallery_url)
         logger.info('Get gallery: {0}'.format(gallery_info.name_jp))
         page_urls = spider.get_page_urls(gallery_url)
-        downloader = Downloader(timeout=5.0, max_thread=10)
+        downloader = DownloadManager(timeout=5.0, max_thread=10)
         downloader.start()
         logger.info('Start gallery: {0}'.format(gallery_info.name_jp))
         # keep trying until all the pictures are downloaded

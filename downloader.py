@@ -9,26 +9,28 @@ from io import BytesIO
 from shutil import copyfileobj
 import socket
 import urllib
+# for type hint
+from spider import GalleryInfo, PageInfo
 
-
-class Downloader(Thread):
-    '''Commander.'''
-    def __init__(self, opener=None, timeout=10.0, max_thread=5):
+class DownloadManager(Thread):
+    '''A thread that automatically control number of running DownloadThread.'''
+    def __init__(self, opener=None, timeout=10.0, max_thread=5) -> None:
         Thread.__init__(self)
 
         self.opener = opener
         self.timeout = timeout
         self.max_thread = max_thread
         self.tasks = []
-        self.failures = []# failed tasks
+        self.failures = []
+        self.oks = []
         self.threads = []
         self.working = False
 
-    def new_download(self, task):
-        '''Add a new download'''
+    def new_download(self, task: (GalleryInfo, PageInfo)) -> None:
+        '''Add a new download task.'''
         self.tasks.append(task)
 
-    def run(self):
+    def run(self) -> None:
         self.working = True
         while self.working:
             sleep(0.05)
@@ -37,7 +39,9 @@ class Downloader(Thread):
                 thread = self.threads[i]
                 if not thread.isAlive():
                     del self.threads[i]
-                    if not thread.ok:
+                    if thread.ok:
+                        self.oks.append((thread.gallery_info, thread.page_info))
+                    else:
                         self.failures.append((thread.gallery_info, thread.page_info))
                     logger.debug('Thread exited: {0}'.format(thread.ident))
                     break
@@ -50,19 +54,22 @@ class Downloader(Thread):
                 self.threads.append(thread)
                 logger.debug('Starting new thread: {0}'.format(thread.ident))
 
-    def stop(self):
+    def resume(self) -> None:
+        self.working = True
+
+    def stop(self) -> None:
         self.working = False
 
     @property
-    def finished(self):
+    def finished(self) -> bool:
         '''Will be True if all the downloads are completed'''
         return len(self.tasks) == 0 and len(self.threads) == 0
 
 class DownloadThread(Thread):
-    '''Worker.'''
+    '''A thread that downloads a single image.'''
     translate_map = str.maketrans('/', '／')
 
-    def __init__(self, task, opener=None, timeout=10.0):
+    def __init__(self, task: (GalleryInfo, PageInfo), opener=None, timeout=10.0) -> None:
         Thread.__init__(self)
 
         self.gallery_info, self.page_info = task
@@ -74,10 +81,10 @@ class DownloadThread(Thread):
         self.bytesread = 0
         self.length = -1
 
-    def run(self):
+    def run(self) -> None:
         self.working = True
 
-        # Make a directory named as the Japanese name of the gallery.
+        # make a directory named as the Japanese name of the gallery
         dir_path = self.gallery_info.name_jp
         dir_path = dir_path.translate(self.translate_map)
         if not os.path.exists(dir_path):
@@ -87,7 +94,7 @@ class DownloadThread(Thread):
             logger.info('Skip: {0}'.format(self.page_info.img_name))
             self.ok = True
             return
-        
+        # start downloading
         self.ok = False
         logger.info('Start: {0}'.format(self.page_info.img_name))
         buf = BytesIO()
@@ -96,6 +103,7 @@ class DownloadThread(Thread):
             self.length = response.getheader('Content-Length','-1')
             self.length = int(self.length)
             while self.working:
+                # read data and update information
                 data = response.read(512)
                 if not data:
                     self.ok = True
@@ -111,14 +119,18 @@ class DownloadThread(Thread):
         if not self.ok:
             logger.info('Failed: {0}'.format(self.page_info.img_name))
             return
-        # Save the file to the disk.
+        # save the image
         buf.seek(0)
         copyfileobj(buf, open(file_path, 'wb'))
         logger.info('Finish: {0}'.format(self.page_info.img_name))
 
-    def stop(self):
+    def resume(self) -> None:
+        self.working = True
+
+    def stop(self) -> None:
         self.working = False
 
     @property
-    def second_lapsed(self):
+    def second_lapsed(self) -> float:
         return time() - self.begin
+
