@@ -8,7 +8,7 @@ logger = logging.getLogger('e-spider.spider')
 import requests
 from pyquery import PyQuery
 
-# For type hint ...
+# for type hint ...
 from io import FileIO
 import lxml
 HtmlElement = lxml.html.HtmlElement
@@ -134,7 +134,7 @@ class Spider(Requester):
 
         category = query('img.ic')[0].attrib['src'].split('/')[-1]
         uploader = query('#gdn > a:nth-child(1)')[0].text
-        infos = None # Not supported yet.
+        infos = None # not supported yet
         translated = 'This gallery has been translated from the original language text.' in html
         resized = 'This gallery has been resized for online viewing.' in html
 
@@ -144,7 +144,7 @@ class Spider(Requester):
         rating_count = query('#rating_count')[0].text
         rating_count = int(rating_count)
 
-        tags = None # Not supported yet.
+        tags = None # not supported yet
 
         return GalleryInfo(gid=gid,
                            token=token,
@@ -161,7 +161,7 @@ class Spider(Requester):
 
     def get_page_urls(self, gallery_url: str) -> list:
         '''Get the list of page urls of the given gallery.'''
-        # Process the url.
+        # process the URL
         if '?' in gallery_url:
             gallery_url = gallery_url.split('?')[0]
         if not gallery_url.endswith('/'):
@@ -188,7 +188,6 @@ class Spider(Requester):
     def get_page_info(self, page_url: str) -> PageInfo:
         '''Get the PageInfo object by the given url.'''
         # page url: http://g.e-hentai.org/s/imgkey/gid-page/[?nl=xxx[&nl=xxx[...]]]
-
         query = self.get_query(page_url)
         
         img_url = query('img#img')[0].attrib['src']
