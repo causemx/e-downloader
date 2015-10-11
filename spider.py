@@ -88,7 +88,7 @@ class Spider(Requester):
                 'ipb_login_submit' : 'Login!'}
         response = self.post(base_url, params=params, data=data)
         html = response.text
-        open('1.html', 'w').write(html)
+        open('error.html', 'w').write(html)
         if 'You are now logged in as:' in html:
             return True
         else:
