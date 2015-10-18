@@ -50,7 +50,7 @@ class Requester(object):
     def __init__(self, timeout=10, proxies=None, cookies=None, headers=None) -> None:
         self.timeout = timeout
         self.proxies = proxies
-        self.cookies = cookies if cookies else GreatCookieJar()
+        self.cookies = cookies if cookies is not None else GreatCookieJar()
         self.headers = headers
 
     def get(self, url: str, **kwargs) -> requests.Response:
@@ -71,6 +71,7 @@ class Requester(object):
                                  headers=self.headers,
                                  **kwargs)
         self.cookies.update(response.cookies)
+        print(self.cookies)
         return response
 
 

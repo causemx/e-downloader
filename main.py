@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
-from spider import GreatCookieJar
-from spider import Spider
+from gallery import GreatCookieJar, Spider
 from downloader import DownloadManager
 from time import sleep
 from sys import argv
@@ -22,17 +21,17 @@ def main(args):
                     proxies=None)
     # ask user to enter arguments if it is not given by command line
     if not args:
-        args = input('Arguments: ').split(' ')
-    
+        print_usage()
+        return
     if args[0] == 'login':
+        if len(args) != 3:
+            print_usage()
+            return
         print('Logging in ... ', end='', flush=True)
         result = spider.login(args[1], args[2])
         cj.store(open('cookie.txt', 'w'))
         print('done.' if result else 'failed.')
-        if len(args) > 3:
-            gallery_urls = args[3:]
-        else:
-            gallery_urls = []
+        return
     else:
         gallery_urls = args[:]
     # now we are good to deal with given URLs
@@ -67,8 +66,13 @@ def main(args):
             sleep(0.1)
         downloader.stop()
         logger.info('Gallery downloaded: {0}'.format(gallery_info.name_jp))
+
     # save cookies
     cj.store(open('cookie.txt','w'))
+    logger.info('Cookie saved.')
+
+def print_usage():
+    pass
 
 if __name__ == '__main__':
     # setup logger
