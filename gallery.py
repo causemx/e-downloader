@@ -71,7 +71,6 @@ class Requester(object):
                                  headers=self.headers,
                                  **kwargs)
         self.cookies.update(response.cookies)
-        print(self.cookies)
         return response
 
 

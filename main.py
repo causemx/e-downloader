@@ -6,6 +6,7 @@ from time import sleep
 from sys import argv
 import logging
 import os
+import copy
 
 logger = logging.getLogger('e-spider.main')
 
@@ -29,6 +30,12 @@ def main(args):
             return
         print('Logging in ... ', end='', flush=True)
         result = spider.login(args[1], args[2])
+        # copy cookies from .e-hentai.org to .exhentai.org
+        for cookie in cj:
+            if cookie.domain == '.e-hentai.org':
+                cookie = copy.copy(cookie)
+                cookie.domain = '.exhentai.org'
+                cj.set_cookie(cookie)
         cj.store(open('cookie.txt', 'w'))
         print('done.' if result else 'failed.')
         return
