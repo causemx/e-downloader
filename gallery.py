@@ -2,7 +2,7 @@
 from time import sleep, time
 import traceback
 import logging
-logger = logging.getLogger('e-spider.spider')
+logger = logging.getLogger('e-spider.gallery')
 
 import requests
 from requests.cookies import RequestsCookieJar
@@ -26,7 +26,7 @@ class GreatCookieJar(RequestsCookieJar):
             self.set_cookie(eval(line))
 
 
-# namedtuple is a metaclass, see module namedtuple for detail.
+# namedtuple is a metaclass, see module collections.
 # information of a gallery page
 PageInfo = namedtuple('PageInfo', ['img_name', 'img_url', 'origin_img', 'reload_url'])
 # information of a gallery
@@ -89,10 +89,7 @@ class Spider(Requester):
         response = self.post(base_url, params=params, data=data)
         html = response.text
         open('error.html', 'w').write(html)
-        if 'You are now logged in as:' in html:
-            return True
-        else:
-            return False
+        return 'You are now logged in as:' in html
 
     def check_login(self) -> bool:
         html = self.get('http://forums.e-hentai.org/').text
