@@ -2,7 +2,7 @@
 from time import sleep, time
 import traceback
 import logging
-logger = logging.getLogger('e-spider.gallery')
+logger = logging.getLogger('e-spider.spider')
 
 import requests
 from requests.cookies import RequestsCookieJar
@@ -50,7 +50,7 @@ class Requester(object):
     def __init__(self, timeout=10, proxies=None, cookies=None, headers=None) -> None:
         self.timeout = timeout
         self.proxies = proxies
-        self.cookies = cookies if cookies is not None else GreatCookieJar()
+        self.cookies = cookies if not cookies is None else GreatCookieJar()
         self.headers = headers
 
     def get(self, url: str, **kwargs) -> requests.Response:
@@ -75,7 +75,7 @@ class Requester(object):
 
 
 class Spider(Requester):
-    '''Get infomation from e-hentai gallery.'''
+    '''Requester for e-hentai.org.'''
     def login(self, username: str, password: str) -> bool:
         '''Login to get the cookies we need to access exhentai.org.'''
         base_url = 'https://forums.e-hentai.org/index.php'
@@ -89,17 +89,22 @@ class Spider(Requester):
         response = self.post(base_url, params=params, data=data)
         html = response.text
         open('error.html', 'w').write(html)
-        return 'You are now logged in as:' in html
+        self.logged_in = 'You are now logged in as:' in html
+        return self.logged_in
 
     def check_login(self) -> bool:
+        if hasattr(self, 'logged_in'):
+            return self.logged_in
         html = self.get('http://forums.e-hentai.org/').text
-        return 'Welcome guest' not in html
+        self.logged_in = 'Welcome guest' not in html
+        return self.logged_in
 
-    def get_query(self, url: str) -> PyQuery:
+    def get_query(self, url: str, **kwargs) -> PyQuery:
+        '''Get the page and try to parse it.'''
         while True:
             sleep(0.25)
             try:
-                response = self.get(url)
+                response = self.get(url, **kwargs)
                 html = response.text
                 if html.startswith('Your IP address'):
                     logger.error('IP address baned.')
@@ -111,6 +116,8 @@ class Spider(Requester):
         query = PyQuery(html)
         return query
 
+class GallerySpider(Spider):
+    '''Get information from e-hentai gallery.'''
     def get_gallery_info(self, gallery_url: str) -> GalleryInfo:
         '''Get the GalleryInfo object from by given url.'''
         # gallery url: http://g.e-hentai.org/g/gid/token/[?p=xxx]
@@ -211,4 +218,67 @@ class Spider(Requester):
                         img_url=img_url,
                         origin_img=origin_url,
                         reload_url=reload_url)
+
+
+class Searcher(Spider):
+    '''Search galleries in e-hentai gallery.'''
+    def search(self,
+               keyword='',
+               allow_doujinshi=True,
+               allow_manga=True,
+               allow_artistcg=True,
+               allow_gamecg=True,
+               allow_western=True,
+               allow_nonh=True,
+               allow_imageset=True,
+               allow_cosplay=True,
+               allow_asianporn=True,
+               allow_misc=True,
+               base_url=None) -> None:
+        self.keyword = keyword
+        self.allow_doujinshi = allow_doujinshi
+        self.allow_manga = allow_manga
+        self.allow_artistcg = allow_artistcg
+        self.allow_gamecg = allow_gamecg
+        self.allow_western = allow_western
+        self.allow_nonh = allow_nonh
+        self.allow_imageset = allow_imageset
+        self.allow_cosplay = allow_cosplay
+        self.allow_asianporn = allow_asianporn
+        self.allow_misc = allow_misc
+        self.page = 0
+        if base_url:
+            self.base_url = base_url
+        else:
+            if self.check_login():
+                self.base_url = 'http://exhentai.org/'
+            else:
+                self.base_url = 'http://g.e-hentai.org/'
+
+    def make_params(self) -> None:
+        params = {'f_doujinshi': self.allow_doujinshi,
+                  'f_manga': self.allow_manga,
+                  'f_artistcg': self.allow_artistcg,
+                  'f_gamecg': self.allow_gamecg,
+                  'f_western': self.allow_western,
+                  'f_non-h': self.allow_nonh,
+                  'f_imageset': self.allow_imageset,
+                  'f_cosplay': self.allow_cosplay,
+                  'f_asianporn': self.allow_asianporn,
+                  'f_misc': self.allow_misc}
+        params = {key: '1' if value else '0' for key,value in params.items()}
+        params['f_search'] = self.keyword
+        params['f_apply'] = 'Apply Filter'
+        params['page'] = str(self.page)
+        return params
+
+    def fetch_result(self, page=None) -> list:
+        if page:
+            self.page = page
+        params = self.make_params()
+        query = self.get_query(self.base_url, params=params)
+        results = query('tr[class^="gtr"] > td:nth-child(3) > div:nth-child(1) > div:nth-child(3) > a:nth-child(1)')
+        results = [result.attrib['href'] for result in results]
+        self.page += 1
+        return results
 

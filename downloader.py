@@ -10,7 +10,7 @@ from shutil import copyfileobj
 import socket
 import urllib
 # for type hint
-from gallery import GalleryInfo, PageInfo
+from spider import GalleryInfo, PageInfo
 
 class DownloadManager(Thread):
     '''A thread that automatically control number of running DownloadThread.'''

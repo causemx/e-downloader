@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from gallery import GreatCookieJar, Spider
+from spider import GreatCookieJar, GallerySpider
 from downloader import DownloadManager
 from time import sleep
 from sys import argv
@@ -16,7 +16,7 @@ def main(args):
     if os.path.exists('cookie.txt'):
         cj.restore(open('cookie.txt', 'r'))
         logger.info('Cookie loaded.')
-    spider = Spider(timeout=4.0,
+    spider = GallerySpider(timeout=4.0,
                     cookies=cj,
                     headers={'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:41.0) Gecko/20100101 Firefox/41.0'},
                     proxies=None)
@@ -91,6 +91,6 @@ if __name__ == '__main__':
     formatter = logging.Formatter('%(asctime)-15s %(threadName)s %(levelname)s - %(message)s')
     ch.setFormatter(formatter)
     module_logger.addHandler(ch)
-    # call main
+
     main(argv[1:])
 
