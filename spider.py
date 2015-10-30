@@ -3,6 +3,7 @@ from time import sleep, time
 import traceback
 import logging
 logger = logging.getLogger('e-spider.spider')
+import math
 
 import requests
 from requests.cookies import RequestsCookieJar
@@ -95,7 +96,7 @@ class Spider(Requester):
     def check_login(self) -> bool:
         if hasattr(self, 'logged_in'):
             return self.logged_in
-        html = self.get('http://forums.e-hentai.org/').text
+        html = self.get_query('http://forums.e-hentai.org/').html()
         self.logged_in = 'Welcome guest' not in html
         return self.logged_in
 
@@ -134,9 +135,9 @@ class GallerySpider(Spider):
             return None
 
         name_en = query('h1#gn')[0].text
-        try:
-            name_jp = query('h1#gj')[0].text
-        except IndexError:
+        name_jp = query('h1#gj')
+        name_jp = name_jp[0].text if name_jp else name_en
+        if name_jp is None:
             name_jp = name_en
 
         category = query('img.ic')[0].attrib['src'].split('/')[-1]
@@ -166,31 +167,38 @@ class GallerySpider(Spider):
                            rating_count=rating_count,
                            tags=tags)
 
+    def fetch_page_urls(self, gallery_url: str, page: int) -> list:
+        '''Get the list of page urls in given page of thumbnails.'''
+        # process the url
+        gallery_url = gallery_url.split('?')[0]
+        if not gallery_url.endswith('/'):
+            gallery_url += '/'    
+        url = gallery_url + '?p=' +str(page)
+        query = self.get_query(url)
+        logger.debug('Gallery thumbnail page get: ' + url)
+
+        gpc = query('.gpc')[0].text.split(' ')
+        range_start = int(gpc[1])
+        range_end = int(gpc[3])
+        all_pages = int(gpc[5])
+        if (range_end - range_start + 1) * (page + 1) > all_pages:
+            return []
+
+        page_urls = query('div.gdtm > div:nth-child(1) > a:nth-child(1)')
+        page_urls = [page_url.attrib['href'] for page_url in page_urls]
+        return page_urls
+
     def get_page_urls(self, gallery_url: str) -> list:
         '''Get the list of page urls of the given gallery.'''
-        # process the URL
-        if '?' in gallery_url:
-            gallery_url = gallery_url.split('?')[0]
-        if not gallery_url.endswith('/'):
-            gallery_url += '/'
-        pages = []
-        p = 0
+        page = 0
         while True:
-            url = gallery_url + '?p=' + str(p)
-            query=self.get_query(url)
-            
-            gpc = query('.gpc')[0].text.split(' ')
-            current_page = gpc[3]
-            all_pages = gpc[5]
-            logger.debug('Gallery page get: ' + url)
-
-            for page_link in query('div.gdtm > div:nth-child(1) > a:nth-child(1)'):
-                pages.append(page_link.attrib['href'])
-
-            if current_page == all_pages:
+            page_urls = self.fetch_page_urls(gallery_url, page)
+            if page_urls:
+                for page_url in page_urls:
+                    yield page_url
+            else:
                 break
-            p += 1
-        return pages
+            page += 1
 
     def get_page_info(self, page_url: str) -> PageInfo:
         '''Get the PageInfo object by the given url.'''
@@ -222,63 +230,78 @@ class GallerySpider(Spider):
 
 class Searcher(Spider):
     '''Search galleries in e-hentai gallery.'''
-    def search(self,
-               keyword='',
-               allow_doujinshi=True,
-               allow_manga=True,
-               allow_artistcg=True,
-               allow_gamecg=True,
-               allow_western=True,
-               allow_nonh=True,
-               allow_imageset=True,
-               allow_cosplay=True,
-               allow_asianporn=True,
-               allow_misc=True,
-               base_url=None) -> None:
-        self.keyword = keyword
-        self.allow_doujinshi = allow_doujinshi
-        self.allow_manga = allow_manga
-        self.allow_artistcg = allow_artistcg
-        self.allow_gamecg = allow_gamecg
-        self.allow_western = allow_western
-        self.allow_nonh = allow_nonh
-        self.allow_imageset = allow_imageset
-        self.allow_cosplay = allow_cosplay
-        self.allow_asianporn = allow_asianporn
-        self.allow_misc = allow_misc
-        self.page = 0
-        if base_url:
-            self.base_url = base_url
-        else:
-            if self.check_login():
-                self.base_url = 'http://exhentai.org/'
-            else:
-                self.base_url = 'http://g.e-hentai.org/'
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.keyword = ''
+        self.doujinshi = True
+        self.manga = True
+        self.artistcg = True
+        self.gamecg = True
+        self.western = True
+        self.non_h = True
+        self.imageset = True
+        self.cosplay = True
+        self.asianporn = True
+        self.misc = True
+        self.advanced_search = False
+        self.search_name = True
+        self.search_tags = True
+        self.min_rating = None
 
-    def make_params(self) -> None:
-        params = {'f_doujinshi': self.allow_doujinshi,
-                  'f_manga': self.allow_manga,
-                  'f_artistcg': self.allow_artistcg,
-                  'f_gamecg': self.allow_gamecg,
-                  'f_western': self.allow_western,
-                  'f_non-h': self.allow_nonh,
-                  'f_imageset': self.allow_imageset,
-                  'f_cosplay': self.allow_cosplay,
-                  'f_asianporn': self.allow_asianporn,
-                  'f_misc': self.allow_misc}
+    def make_params(self, page: int) -> None:
+        params = {'f_doujinshi': self.doujinshi,
+                  'f_manga': self.manga,
+                  'f_artistcg': self.artistcg,
+                  'f_gamecg': self.gamecg,
+                  'f_western': self.western,
+                  'f_non-h': self.non_h,
+                  'f_imageset': self.imageset,
+                  'f_cosplay': self.cosplay,
+                  'f_asianporn': self.asianporn,
+                  'f_misc': self.misc}
         params = {key: '1' if value else '0' for key,value in params.items()}
         params['f_search'] = self.keyword
         params['f_apply'] = 'Apply Filter'
-        params['page'] = str(self.page)
+        params['page'] = str(page)
+        if self.advanced_search:
+            params['advsearch'] = '1'
+            params['f_sname'] = 'on' if self.search_name else 'off'
+            params['f_stags'] = 'on' if self.search_tags else 'off'
+            if self.min_rating:
+                params['f_sr'] = 'on'
+                params['f_srdd'] = str(self.min_rating)
         return params
 
-    def fetch_result(self, page=None) -> list:
-        if page:
-            self.page = page
-        params = self.make_params()
-        query = self.get_query(self.base_url, params=params)
+    def fetch_results(self, page: int) -> list:
+        params = self.make_params(page)
+        if self.check_login():
+            base_url = 'http://exhentai.org/'
+        else:
+            base_url = 'http://g.e-hentai.org/'
+        query = self.get_query(base_url, params=params)
+
+        process_number = lambda s: int(s.replace(',', ''))
+        ip = query('p.ip')[0]
+        ip = ip.text.split(' ')
+        range_start = process_number(ip[1].split('-')[0])
+        range_end = process_number(ip[1].split('-')[1])
+        range_all = process_number(ip[-1])
+        range_length = range_end - range_start + 1
+        page_count = math.ceil(range_all / range_length)
+        if range_end == range_all:
+            return []
+
         results = query('tr[class^="gtr"] > td:nth-child(3) > div:nth-child(1) > div:nth-child(3) > a:nth-child(1)')
         results = [result.attrib['href'] for result in results]
-        self.page += 1
         return results
+
+    def __iter__(self):
+        page = 0
+        while True:
+            results = self.fetch_results(page)
+            page += 1
+            if not results:
+                break
+            for result in results:
+                yield result
 
