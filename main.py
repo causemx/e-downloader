@@ -22,7 +22,7 @@ def main(args):
                     proxies=None)
     
     if not args:
-        print_usage()
+        print_usage_and_exit()
         return
     if args[0] == 'login':
         if len(args) != 3:
@@ -41,7 +41,7 @@ def main(args):
     cj.store(open('cookie.txt','w'))
     logger.info('Cookie saved.')
 
-def print_usage():
+def print_usage_and_exit():
     print('./main.py login <username> <password>')
     print('./main.py download <gallery url>')
     exit(1)
