@@ -1,16 +1,16 @@
 ﻿import os
 from time import sleep, time
 from threading import Thread
-from http.client import HTTPException
 import logging
 logger = logging.getLogger('e-spider.downloader')
 import traceback
 from io import BytesIO
-from shutil import copyfileobj
-import socket
 import urllib
-# for type hint
+from http.client import HTTPException
+import socket
+from shutil import copyfileobj
 from spider import GalleryInfo, PageInfo
+
 
 class DownloadManager(Thread):
     '''A thread that automatically control number of running DownloadThread.'''
@@ -26,7 +26,7 @@ class DownloadManager(Thread):
         self.threads = []
         self.working = False
 
-    def new_download(self, task: (GalleryInfo, PageInfo)) -> None:
+    def new_download(self, task) -> None:
         '''Add a new download task.'''
         self.tasks.append(task)
 
@@ -40,7 +40,7 @@ class DownloadManager(Thread):
                 if not thread.isAlive():
                     del self.threads[i]
                     if thread.ok:
-                        self.oks.append((thread.gallery_info, thread.page_info))
+                        self.oks.append(thread)
                     else:
                         self.failures.append((thread.gallery_info, thread.page_info))
                     logger.debug('Thread exited: {0}'.format(thread.ident))
@@ -69,10 +69,13 @@ class DownloadThread(Thread):
     '''A thread that downloads a single image.'''
     translate_map = str.maketrans('/', '／')
 
-    def __init__(self, task: (GalleryInfo, PageInfo), opener=None, timeout=10.0) -> None:
+    def __init__(self, task: (GalleryInfo, PageInfo, str), opener=None, timeout=10.0) -> None:
         Thread.__init__(self)
 
-        self.gallery_info, self.page_info = task
+        self.task = task
+        self.gallery_info, self.page_info, self.outdir = task
+        if not self.outdir.endswith(os.sep):
+            self.outdir += os.sep
         self.open = opener.open if opener else urllib.request.urlopen
         self.timeout = timeout
         self.begin = time()
@@ -85,10 +88,9 @@ class DownloadThread(Thread):
         self.working = True
 
         # make a directory named as the Japanese name of the gallery
-        dir_path = self.gallery_info.name_jp
-        dir_path = dir_path.translate(self.translate_map)
+        dir_path = self.outdir + self.gallery_info.name_jp.translate(self.translate_map)
         if not os.path.exists(dir_path):
-            os.mkdir(dir_path)
+            os.makedirs(dir_path)
         file_path = dir_path + os.sep + self.page_info.img_name
         if os.path.exists(file_path):
             logger.info('Skip: {0}'.format(self.page_info.img_name))

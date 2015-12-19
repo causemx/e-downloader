@@ -32,8 +32,12 @@ def main(args):
         if len(args) == 1:
             print_usage_and_exit()
         gallery_urls = args[1:]
+        outdir = '.'
         for gallery_url in gallery_urls:
-          download_gallery(spider, gallery_url)
+            if gallery_url.startswith('--outdir='):
+                outdir = gallery_url.split('=')[-1]
+            else:
+                download_gallery(spider, gallery_url, outdir)
     else:
         print_usage_and_exit()
 
@@ -43,10 +47,10 @@ def main(args):
 
 def print_usage_and_exit():
     print('./main.py login <username> <password>')
-    print('./main.py download <gallery url>')
+    print('./main.py download [--outdir=<output dir>] <gallery url>')
     exit(1)
 
-def download_gallery(spider, gallery_url):
+def download_gallery(spider, gallery_url, outdir):
     # get GalleryInfo object and URLs needed for getting PageInfo objects
     gallery_info =spider.get_gallery_info(gallery_url)
     logger.info('Get gallery: {0}'.format(gallery_info.name_jp))
@@ -62,7 +66,7 @@ def download_gallery(spider, gallery_url):
                 logger.error('You have temporarily reached the limit for how many images you can browse.')
                 continue
             logger.debug('Get picture: {0}'.format(page_info.img_name))
-            downloader.new_download((gallery_info, page_info))
+            downloader.new_download((gallery_info, page_info, outdir))
         logger.debug('Waiting for DownloadThread ...')
         while not downloader.finished:
              sleep(0.1)
