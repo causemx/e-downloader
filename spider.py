@@ -4,15 +4,15 @@ import traceback
 import logging
 logger = logging.getLogger('e-spider.spider')
 import math
+import xml.etree.ElementTree as ET
+import functools
 
 import requests
 from requests.cookies import RequestsCookieJar
-from pyquery import PyQuery
 
 # for type hint ...
 from io import FileIO
-import lxml
-HtmlElement = lxml.html.HtmlElement
+
 
 class GreatCookieJar(RequestsCookieJar):
     '''Used to save cookies to a file; FileCookieJar is too high-end.'''
@@ -100,7 +100,7 @@ class Spider(Requester):
         self.logged_in = 'Welcome guest' not in html
         return self.logged_in
 
-    def get_query(self, url: str, **kwargs) -> PyQuery:
+    def get_html(self, url: str, **kwargs) -> str:
         '''Get the page and try to parse it.'''
         while True:
             sleep(0.25)
@@ -114,8 +114,19 @@ class Spider(Requester):
             except requests.RequestException:
                 logger.debug(traceback.format_exc())
                 continue
-        query = PyQuery(html)
-        return query
+        html = html.replace('&nbsp;', ' ')
+        return html
+
+    def buildetree(self, html: str) -> ET.Element:
+        root = ET.fromstring(html)
+        elements = root.findall('.//*')
+        for element in elements:
+            element.tag = element.tag.split('}')[-1]
+        #root.find = partial(str, namespaces=xhtmlmap)
+        #root.findall = partial(str, namespaces=xhtmlmap)
+        return root
+
+    xhtmlmap = {'http://www.w3.org/1999/xhtml': 'xhtml'}
 
 class GallerySpider(Spider):
     '''Get information from e-hentai gallery.'''
@@ -126,30 +137,29 @@ class GallerySpider(Spider):
         gid = gallery_url.split('/')[-3]
         token = gallery_url.split('/')[-2]
 
-        query = self.get_query(gallery_url)
-        html = query.outer_html()
+        html = self.get_html(gallery_url)
+        htmlroot = self.buildetree(html)
 
         if 'This gallery has been removed, and is unavailable.' in html:
             return None
         if 'Content Warning' in html:
             return None
 
-        name_en = query('h1#gn')[0].text
-        name_jp = query('h1#gj')
-        name_jp = name_jp[0].text if name_jp else name_en
-        if name_jp is None:
-            name_jp = name_en
+        name_en = htmlroot.find(".//*[@id='gn']").text
+        name_jp = htmlroot.find(".//*[@id='gj']")
+        name_jp = name_jp.text if name_jp else name_en
 
-        category = query('img.ic')[0].attrib['src'].split('/')[-1]
-        uploader = query('#gdn > a:nth-child(1)')[0].text
+        category = htmlroot.find(".//img[@class='ic']").get('src')
+        category = category.split('/')[-1]
+        uploader = htmlroot.find(".//*[@id='gdn']/a").text
         infos = None # not supported yet
         translated = 'This gallery has been translated from the original language text.' in html
         resized = 'This gallery has been resized for online viewing.' in html
 
-        rating = query('#rating_label')[0].text
+        rating = htmlroot.find(".//*[@id='rating_label']").text
         rating = rating.split(': ')[-1]
         rating = float(rating)
-        rating_count = query('#rating_count')[0].text
+        rating_count = htmlroot.find(".//*[@id='rating_count']").text
         rating_count = int(rating_count)
 
         tags = None # not supported yet
@@ -174,18 +184,19 @@ class GallerySpider(Spider):
         if not gallery_url.endswith('/'):
             gallery_url += '/'    
         url = gallery_url + '?p=' +str(page)
-        query = self.get_query(url)
+        html = self.get_html(url)
+        htmlroot = self.buildetree(html)
         logger.debug('Gallery thumbnail page get: ' + url)
 
-        gpc = query('.gpc')[0].text.split(' ')
+        gpc = htmlroot.find(".//*[@class='gpc']").text.split(' ')
         range_start = int(gpc[1])
         range_end = int(gpc[3])
         all_pages = int(gpc[5])
         if (range_end - range_start + 1) * (page + 1) > all_pages:
             return []
 
-        page_urls = query('div.gdtm > div:nth-child(1) > a:nth-child(1)')
-        page_urls = [page_url.attrib['href'] for page_url in page_urls]
+        page_urls = htmlroot.findall(".//div[@class='gdtm']/div[1]/a[1]")
+        page_urls = [page_url.get('href') for page_url in page_urls]
         return page_urls
 
     def get_page_urls(self, gallery_url: str) -> list:
@@ -203,24 +214,23 @@ class GallerySpider(Spider):
     def get_page_info(self, page_url: str) -> PageInfo:
         '''Get the PageInfo object by the given url.'''
         # page url: http://g.e-hentai.org/s/imgkey/gid-page/[?nl=xxx[&nl=xxx[...]]]
-        query = self.get_query(page_url)
+        html = self.get_html(page_url)
+        htmlroot = self.buildetree(html)
         
-        img_url = query('img#img')[0].attrib['src']
+        img_url = htmlroot.find(".//img[@id='img']").get('src')
 
-        i4 = query('#i4 > div:nth-child(1)')[0]
+        i4 = htmlroot.find(".//div[@id='i4']/div[1]")
         img_name, img_size, img_len = i4.text.split(' :: ')
 
-        reload_url = query('a[href="#"]')[0].attrib['onclick']
+        reload_url = htmlroot.find(".//a[@href='#']").get('onclick')
         reload_url = reload_url.split("('")[-1].split("')")[0]
         if '?' in page_url:
             reload_url = page_url + '&nl=' + reload_url
         else:
             reload_url = page_url + '?nl=' + reload_url
 
-        try:
-            origin_url = query('#i7 > a:nth-child(2)')[0].attrib['href']
-        except IndexError:
-            origin_url = None
+        origin_url = htmlroot.find(".//*[@id='i7']/a[2]/")
+        origin_url = origin_url.get('href') if origin_url else None
 
         return PageInfo(img_name=img_name,
                         img_url=img_url,
