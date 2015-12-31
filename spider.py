@@ -147,7 +147,7 @@ class GallerySpider(Spider):
 
         name_en = htmlroot.find(".//*[@id='gn']").text
         name_jp = htmlroot.find(".//*[@id='gj']")
-        name_jp = name_jp.text if name_jp else name_en
+        name_jp = name_jp.text if name_jp is not None else name_en
 
         category = htmlroot.find(".//img[@class='ic']").get('src')
         category = category.split('/')[-1]
