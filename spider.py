@@ -146,8 +146,11 @@ class GallerySpider(Spider):
             return None
 
         name_en = htmlroot.find(".//*[@id='gn']").text
-        name_jp = htmlroot.find(".//*[@id='gj']")
-        name_jp = name_jp.text if name_jp is not None else name_en
+        name_jp_node = htmlroot.find(".//*[@id='gj']")
+        if name_jp_node == None:
+            name_jp = name_en
+        else:
+            name_jp = name_jp_node.text
 
         category = htmlroot.find(".//img[@class='ic']").get('src')
         category = category.split('/')[-1]
@@ -237,7 +240,7 @@ class GallerySpider(Spider):
                         origin_img=origin_url,
                         reload_url=reload_url)
 
-
+'''
 class Searcher(Spider):
     '''Search galleries in e-hentai gallery.'''
     def __init__(self, *args, **kwargs):
@@ -315,3 +318,4 @@ class Searcher(Spider):
             for result in results:
                 yield result
 
+'''
