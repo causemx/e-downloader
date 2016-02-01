@@ -192,9 +192,9 @@ class GallerySpider(Spider):
         logger.debug('Gallery thumbnail page get: ' + url)
 
         gpc = htmlroot.find(".//*[@class='gpc']").text.split(' ')
-        range_start = int(gpc[1])
-        range_end = int(gpc[3])
-        all_pages = int(gpc[5])
+        range_start = int(gpc[1].replace(',',''))
+        range_end = int(gpc[3].replace(',',''))
+        all_pages = int(gpc[5].replace(',',''))
         if (range_end - range_start + 1) * (page + 1) > all_pages:
             return []
 
@@ -240,7 +240,6 @@ class GallerySpider(Spider):
                         origin_img=origin_url,
                         reload_url=reload_url)
 
-'''
 class Searcher(Spider):
     '''Search galleries in e-hentai gallery.'''
     def __init__(self, *args, **kwargs):
@@ -318,4 +317,3 @@ class Searcher(Spider):
             for result in results:
                 yield result
 
-'''
