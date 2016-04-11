@@ -1,3 +1,4 @@
 *.pyproj
 .vs/
-
+cookie.txt
+__pycache__/
