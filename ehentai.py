@@ -7,6 +7,9 @@ import requests
 import requests.cookies
 
 
+DATA_CHUNK_SIZE = 1024
+
+
 def remove_namespace(root_node: ET.Element) -> ET.Element:
     '''Remove namespace from tag name of a node and its children.'''
 
@@ -30,9 +33,13 @@ def parse_html(html: str) -> ET.Element:
 async def fetch_data(session, url, timeout=10.0, **kwargs):
     '''Fetch data using HTTP GET method.'''
 
+    data = b''
     with aiohttp.Timeout(timeout):
         async with session.get(url, **kwargs) as r:
-            data = await r.read()
+            chunk = await r.content.read(DATA_CHUNK_SIZE)
+            while chunk:
+                data += chunk
+                chunk = await r.content.read(DATA_CHUNK_SIZE)
     return data
 
 async def fetch_data_ensure(session, url, timeout=10.0, retry_intervial=0.5, **kwargs):
@@ -57,9 +64,13 @@ async def fetch_data_ensure(session, url, timeout=10.0, retry_intervial=0.5, **k
 async def fetch_text(session, url, timeout=10.0, encoding=None, **kwargs):
     '''Fetch text using HTTP GET method.'''
 
+    data = b''
     with aiohttp.Timeout(timeout):
         async with session.get(url, **kwargs) as r:
-            data = await r.read()
+            chunk = await r.content.read(DATA_CHUNK_SIZE)
+            while chunk:
+                data += chunk
+                chunk = await r.content.read(DATA_CHUNK_SIZE)
     content_type = r.headers.get('Content-Type', '')
     if 'charset=' in content_type:
         charset = content_type.split('charset=')[-1].split(';')[0]
