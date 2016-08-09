@@ -1,5 +1,6 @@
 import asyncio
 import os
+import urllib.parse
 from ehentai import fetch_text_ensure
 from ehentai import parse_html
 from ehentai import fetch_data_ensure
@@ -15,14 +16,15 @@ def parse_int(s):
 
 
 class Gallery:
-    def __init__(self, gallery_id, gallery_token):
+    def __init__(self, gallery_id, gallery_token, base_url='http://g.e-hentai.org'):
         self.gallery_id = gallery_id
         self.token = gallery_token
+        self.base_url = base_url
         self.content_map = None
         self.loaded = False
 
-    async def load_preview(self, session, preview_page=0, domain='exhentai.org'):
-        url = self.get_url(preview_page, domain)
+    async def load_preview(self, session, preview_page=0):
+        url = self.get_preview_page_url(preview_page)
         html = await fetch_text_ensure(session, url)
         doc = parse_html(html)
 
@@ -50,21 +52,21 @@ class Gallery:
         self.content_map.update({page.page: page for page in pages})
         self.loaded = True
 
-    def get_url(self, preview_page=0, domain='exhentai.org'):
+    def get_preview_page_url(self, preview_page=0):
         if preview_page == 0:
-            url = 'http://{}/g/{}/{}/'.format(
-                domain,
+            url = '{}/g/{}/{}/'.format(
+                self.base_url,
                 self.gallery_id,
                 self.token)
         else:
-            url = 'http://{}/g/{}/{}/?p={}'.format(
-                domain,
+            url = '{}/g/{}/{}/?p={}'.format(
+                self.base_url,
                 self.gallery_id,
                 self.token, 
                 preview_page)
         return url
 
-    async def get_page(self, session, page, domain='exhentai.org'):
+    async def get_page(self, session, page):
         if not self.loaded:
             raise NotLoadedError()
         if page in self.content_map:
@@ -80,7 +82,7 @@ class Gallery:
                 self.content_map[page] = p.prev
                 return p.prev
         preview_page = (page - 1) // self.preview_range
-        await self.load_preview(session, preview_page=preview_page, domain=domain)
+        await self.load_preview(session, preview_page=preview_page)
         return self.content_map[page]
 
     @property
@@ -95,33 +97,35 @@ class Gallery:
 
     @staticmethod
     def parse_url(url):
-        if '?p=' in url:
-            url, page = url.split('?p=')
-            page = int(page)
+        url = urllib.parse.urlparse(url)
+        if url.query:
+            query = urllib.parse.parse_qs(query)
+            page = query.get('p', 0)
         else:
             page = 0
-        part = url.split('/')
-        assert(part[3] == 'g')
-        token = part[-2]
-        gallery_id = int(part[-3])
-        domain = part[2]
-        return {'domain': domain, 'galleryid': gallery_id, 'token': token, 'page': page}
+        part = url.path.split('/')
+        assert(part[1] == 'g')
+        gallery_id = int(part[2])
+        token = part[3]
+        base_url = url.scheme + '://' + url.netloc
+        return {'base_url': base_url, 'gallery_id': gallery_id, 'token': token, 'page': page}
 
     @staticmethod
     def from_url(url):
         result = Gallery.parse_url(url)
-        return Gallery(result['galleryid'], result['token'])
+        return Gallery(result['gallery_id'], result['token'], result['base_url'])
 
 
 class GalleryPage:
-    def __init__(self, gallery_id, page_token, page, reload_info=''):
+    def __init__(self, gallery_id, page_token, page, base_url='http://g.e-hentai.org', reload_info=''):
         self.gallery_id = gallery_id
         self.token = page_token
         self.page = page
-        self.loaded = False
+        self.base_url = base_url
         self.reload_info = reload_info
+        self.loaded = False
 
-    async def load(self, session, domain='exhentai.org'):
+    async def load(self, session):
         url = self.get_url()
         html = await fetch_text_ensure(session, url)
         doc = parse_html(html)
@@ -131,12 +135,12 @@ class GalleryPage:
         prev_url = doc.find('.//a[@id="prev"]').attrib['onclick']
         prev_page = int(get_between(prev_url, '(', ','))
         prev_token = get_between(prev_url, ',', ')')[1:-1]
-        self.prev = GalleryPage(self.gallery_id, prev_token, prev_page)
+        self.prev = GalleryPage(self.gallery_id, prev_token, prev_page, self.base_url)
 
         next_url = doc.find('.//a[@id="next"]').attrib['onclick']
         next_page = int(get_between(next_url, '(', ','))
         next_token = get_between(next_url, ',', ')')[1:-1]
-        self.next = GalleryPage(self.gallery_id, next_token, next_page)
+        self.next = GalleryPage(self.gallery_id, next_token, next_page, self.base_url)
 
         preview_url = doc.find('.//div[@id="i5"]/div/a').attrib['href']
         self.preview_page = int(preview_url.split('?p=')[-1]) if '?p=' in preview_url else 0
@@ -163,9 +167,9 @@ class GalleryPage:
         else:
             self.reload_info = '?nl=' + reload_info
 
-    def get_url(self, domain='exhentai.org'):
-        url = 'http://{}/s/{}/{}-{}'.format(
-            domain,
+    def get_url(self):
+        url = '{}/s/{}/{}-{}'.format(
+            self.base_url,
             self.token,
             self.gallery_id,
             self.page)
@@ -175,71 +179,25 @@ class GalleryPage:
 
     @staticmethod
     def parse_url(url):
-        result = {}
-        if '?' in url:
-            url, reload_info = url.split('?')
-            result['reload_info'] = reload_info
-        part = url.split('/')
-        assert(part[3] == 's')
-        domain = part[2]
-        gallery_id, page = part[-1].split('-')
+        url = urllib.parse.urlparse(url)
+        if url.query:
+            query = urllib.parse.parse_qs(url.query)
+            reload_info = query.get('reload_info', '')
+        else:
+            reload_info = ''
+        part = url.path.split('/')
+        assert(part[1] == 's')
+        gallery_id, page = part[3].split('-')
         gallery_id = int(gallery_id)
         page = int(page)
-        page_token = part[-2]
-        result.update({'domain': domain,
-                       'galleryid': gallery_id,
-                       'token': page_token,
-                       'page': page})
-        return result
+        page_token = part[2]
+        base_url = url.scheme + '://' + url.netloc
+        return {'base_url': base_url, 'gallery_id': gallery_id, 'token': page_token, 'page': page, 'reload_info': reload_info}
 
     @staticmethod
     def from_url(url):
         result = GalleryPage.parse_url(url)
-        return GalleryPage(result['galleryid'], result['token'], result['page'], result.get('reload_info', ''))
-
-
-async def fetch_gallery(session, url, download_method):
-    gallery = Gallery.from_url(url)
-    await gallery.load_preview(session)
-
-    loop = asyncio.get_event_loop()
-    tasks = []
-
-    for i in range(1, gallery.img_count + 1):
-        page = await gallery.get_page(session, i)
-        task = loop.create_task(download_method(session, page))
-        tasks.append(task)
-        await asyncio.sleep(0.3)
-    await asyncio.wait(tasks)
-
-async def download(session, page, output_method=None):
-    if output_method is None:
-        def output_method(p):
-            return '{curdir}{sep}images{sep}{galleryname}{sep}{filename}'.format(
-                curdir=os.curdir,
-                sep=os.sep,
-                filename=p.file_name,
-                galleryname=p.gallery_name)
-
-    if not page.loaded:
-        await page.load(session)
-    data = await fetch_data_ensure(session, page.img_url)
-
-    filename = output_method(page)
-    dirname = os.path.dirname(filename)
-    if not os.path.exists(dirname):
-        os.makedirs(dirname)
-    print(filename)
-
-    try:
-        f = None
-        f = open(filename, 'wb')
-        f.write(data)
-    except:
-        raise
-    finally:
-        if f:
-            f.close()
+        return GalleryPage(result['gallery_id'], result['token'], result['page'], result['base_url'], result['reload_info'])
 
 
 class NotLoadedError(BaseException):
