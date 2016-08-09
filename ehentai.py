@@ -7,7 +7,7 @@ import requests
 import requests.cookies
 
 
-DATA_CHUNK_SIZE = 1024
+DATA_CHUNK_SIZE = 4096
 
 
 def remove_namespace(root_node: ET.Element) -> ET.Element:
