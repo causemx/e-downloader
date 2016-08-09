@@ -36,10 +36,10 @@ class Gallery:
             self.name_jp = name_jp.text
         
         parts = doc.find('.//div[@class="gtb"]/p[@class="gpc"]').text.split(' ')
-        self.img_count = parse_int(parts[5])
+        self.page_count = parse_int(parts[5])
         preview_beg = parse_int(parts[1])
         preview_end = parse_int(parts[3])
-        if preview_end != self.img_count:
+        if preview_end != self.page_count:
             self.preview_range = preview_end - preview_beg + 1
 
         imgs = doc.findall('.//div[@id="gdt"]/div/div/a')
