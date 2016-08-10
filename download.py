@@ -29,9 +29,21 @@ async def download(session, gallery_url):
 
     async def download_image():
         page = await loaded_pages.get()
-        #print(page.img_url)
-        data = await ehentai.fetch_data_ensure(session, page.img_url)
-        open(target_dir + page.img_url.split('/')[-1], 'wb').write(data)
+        #print(page.get_url())
+        try:
+            data = await ehentai.fetch_data(session, page.img_url, timeout=60)
+        except asyncio.TimeoutError:
+            await unloaded_pages.put(page)
+        except aiohttp.BadStatusLine:
+            await unloaded_pages.put(page)
+        except aiohttp.DisconnectedError:
+            await unloaded_pages.put(page)
+        except aiohttp.ClientResponseError:
+            await unloaded_pages.put(page)
+        except:
+            raise
+        else:
+            open(target_dir + page.img_url.split('/')[-1], 'wb').write(data)
         loaded_pages.task_done()
 
     async def do_forever(job):
@@ -53,11 +65,12 @@ async def download(session, gallery_url):
 
     workers = [asyncio.ensure_future(do_forever(get_page)) for __ in range(1)]
     workers += [asyncio.ensure_future(do_forever(load_page)) for __ in range(3)]
-    workers += [asyncio.ensure_future(do_forever(download_image)) for __ in range(10)]
+    workers += [asyncio.ensure_future(do_forever(download_image)) for __ in range(20)]
 
     await planned_pages.join()
-    await unloaded_pages.join()
-    await loaded_pages.join()
+    while unloaded_pages.qsize() != 0 or unloaded_pages._unfinished_tasks != 0 or loaded_pages.qsize() != 0 or loaded_pages._unfinished_tasks != 0:
+        await unloaded_pages.join()
+        await loaded_pages.join()
 
     for worker in workers:
         worker.cancel()
