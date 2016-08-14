@@ -15,6 +15,10 @@ def parse_int(s):
     return int(s.replace(',', ''))
 
 
+class NotLoadedError(BaseException):
+    pass
+
+
 class Gallery:
     def __init__(self, gallery_id, gallery_token, base_url='http://g.e-hentai.org'):
         self.gallery_id = gallery_id
@@ -177,6 +181,10 @@ class GalleryPage:
             url += self.reload_info
         return url
 
+    @property
+    def load_counter(self):
+        return len(self.reload_info.split('&'))
+
     @staticmethod
     def parse_url(url):
         url = urllib.parse.urlparse(url)
@@ -198,7 +206,3 @@ class GalleryPage:
     def from_url(url):
         result = GalleryPage.parse_url(url)
         return GalleryPage(result['gallery_id'], result['token'], result['page'], result['base_url'], result['reload_info'])
-
-
-class NotLoadedError(BaseException):
-    pass

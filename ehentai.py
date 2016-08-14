@@ -34,10 +34,11 @@ async def fetch_data(session, url, timeout=10.0, **kwargs):
     '''Fetch data using HTTP GET method.'''
 
     data = b''
-    with aiohttp.Timeout(timeout):
-        async with session.get(url, **kwargs) as r:
+    async with session.get(url, **kwargs) as r:
+        with aiohttp.Timeout(timeout):
             chunk = await r.content.read(DATA_CHUNK_SIZE)
-            while chunk:
+        while chunk:
+            with aiohttp.Timeout(timeout):
                 data += chunk
                 chunk = await r.content.read(DATA_CHUNK_SIZE)
     return data
@@ -56,6 +57,8 @@ async def fetch_data_ensure(session, url, timeout=10.0, retry_intervial=0.5, **k
             pass
         except aiohttp.ClientResponseError:
             pass
+        except aiohttp.ClientOSError:
+            pass
         else:
             break
         await asyncio.sleep(retry_intervial)
@@ -65,10 +68,11 @@ async def fetch_text(session, url, timeout=10.0, encoding=None, **kwargs):
     '''Fetch text using HTTP GET method.'''
 
     data = b''
-    with aiohttp.Timeout(timeout):
-        async with session.get(url, **kwargs) as r:
+    async with session.get(url, **kwargs) as r:
+        with aiohttp.Timeout(timeout):
             chunk = await r.content.read(DATA_CHUNK_SIZE)
-            while chunk:
+        while chunk:
+            with aiohttp.Timeout(timeout):
                 data += chunk
                 chunk = await r.content.read(DATA_CHUNK_SIZE)
     content_type = r.headers.get('Content-Type', '')
@@ -97,6 +101,8 @@ async def fetch_text_ensure(session, url, timeout=10.0, encoding=None, retry_int
         except aiohttp.DisconnectedError:
             pass
         except aiohttp.ClientResponseError:
+            pass
+        except aiohttp.ClientOSError:
             pass
         else:
             break
