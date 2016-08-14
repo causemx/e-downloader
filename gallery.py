@@ -89,9 +89,9 @@ class Gallery:
     def name(self):
         if not self.loaded:
             raise NotLoadedError()
-        if hasattr(self, 'name_jp'):
+        if self.name_jp is not None:
             return self.name_jp
-        if hasattr(self, 'name_en'):
+        if self.name_en is not None:
             return self.name_en
         return None
 
