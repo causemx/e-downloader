@@ -124,7 +124,7 @@ def prepare_cookies(args):
             cookies = json.loads(cookies)
         cookies = ehentai.convert_cookies(cookies)
         cookiejar.update(cookies)
-        open(cookie_file_path, 'w').write(repr(cookiejar))
+        open(args.cookie_file_path, 'w').write(repr(cookiejar))
     return cookiejar
 
 
