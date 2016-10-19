@@ -2,5 +2,6 @@
 .vs/
 cookie.txt
 __pycache__/
-images/
+Images/
 *.sln
+proxychains.conf
