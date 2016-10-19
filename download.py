@@ -105,7 +105,7 @@ def main(args):
         loop.run_until_complete(download(session, args.gallery_url))
 
     # save cookies
-    cookiejar.update(session.cookies)
+    cookiejar.update(session.cookie_jar._cookies)
     open(args.cookie_file_path, 'w').write(repr(cookiejar))
 
 
