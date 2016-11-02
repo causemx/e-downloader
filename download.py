@@ -1,13 +1,13 @@
-import asyncio
-import aiohttp
-import ehentai
 from gallery import Gallery
+import ehentai
+import aiohttp
 import os
-import json
-import argparse
+import asyncio
 
 
-async def download(session, gallery_url):
+async def download(session, gallery_url, output_dir='./Images/', force_origin=False,
+                   page_fetcher_num=1, page_loader_num=2, image_downloader_num=20,
+                   download_timeout=2.0):
     gallery = Gallery.from_url(gallery_url)
     await gallery.load_preview(session)
 
@@ -29,9 +29,10 @@ async def download(session, gallery_url):
 
     async def download_image():
         page = await loaded_pages.get()
-        print('downloading:', page.get_url().split('?')[0])
+        image_url = page.origin_url if force_origin else page.img_url
+        print('downloading:', page.page)
         try:
-            data = await ehentai.fetch_data(session, page.img_url, timeout=2.0)
+            data = await ehentai.fetch_data(session, image_url, timeout=download_timeout)
         except asyncio.TimeoutError:
             await unloaded_pages.put(page)
         except aiohttp.BadStatusLine:
@@ -43,31 +44,33 @@ async def download(session, gallery_url):
         except aiohttp.ClientOSError:
             await unloaded_pages.put(page)
         except:
+            print('falied:', page.page)
             raise
         else:
+            print('downloaded:', page.page)
             open(target_dir + page.img_url.split('/')[-1], 'wb').write(data)
         loaded_pages.task_done()
 
     async def do_forever(job):
-        try:
-            while True:
+        while True:
+            try:
                 await job()
-        except asyncio.CancelledError:
-            pass
-        except:
-            import traceback
-            traceback.print_exc()
+            except asyncio.CancelledError:
+                break
+            except:
+                import traceback
+                traceback.print_exc()
 
-    target_dir = './Images/' + gallery.name + '/'
+    target_dir = output_dir + gallery.name + '/'
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
 
     for i in range(gallery.page_count):
         await planned_pages.put(i+1)
 
-    workers = [asyncio.ensure_future(do_forever(get_page)) for __ in range(1)]
-    workers += [asyncio.ensure_future(do_forever(load_page)) for __ in range(2)]
-    workers += [asyncio.ensure_future(do_forever(download_image)) for __ in range(20)]
+    workers = [asyncio.ensure_future(do_forever(get_page)) for __ in range(page_fetcher_num)]
+    workers += [asyncio.ensure_future(do_forever(load_page)) for __ in range(page_loader_num)]
+    workers += [asyncio.ensure_future(do_forever(download_image)) for __ in range(image_downloader_num)]
 
     await planned_pages.join()
     # await unloaded_pages and loaded_pages
@@ -77,57 +80,3 @@ async def download(session, gallery_url):
 
     for worker in workers:
         worker.cancel()
-
-
-def main(args):
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--cookie_file', type=str, default='./cookie.txt', dest='cookie_file_path',
-                        help='location of the file to store cookies')
-    parser.add_argument('--cookie_str', type=str, dest='cookie_str',
-                        help='document.cookie string from the browser')
-    parser.add_argument('--proxy', type=str, dest='proxy',
-                        help='http proxy through which data is downloaded')
-    parser.add_argument('gallery_url', type=str,
-                        help='url of the gallery to download')
-    args = parser.parse_args(args)
-
-    # load cookies
-    cookiejar = prepare_cookies(args)
-
-    loop = asyncio.get_event_loop()
-    #loop.set_debug(True)
-
-    if args.proxy:
-        connector = aiohttp.ProxyConnector(args.proxy)
-    else:
-        connector = None
-    with aiohttp.ClientSession(loop=loop, connector=connector, cookies=cookiejar.get_dict()) as session:
-        loop.run_until_complete(download(session, args.gallery_url))
-
-    # save cookies
-    cookiejar.update(session.cookie_jar._cookies)
-    open(args.cookie_file_path, 'w').write(repr(cookiejar))
-
-
-def prepare_cookies(args):
-    path = args.cookie_file_path
-    if os.path.exists(path):
-        cookies = open(path).read()
-        cookiejar = ehentai.GreatCookieJar.from_string(cookies)
-    else:
-        cookiejar = ehentai.GreatCookieJar()
-        if args.cookie_str:
-            cookies = args.cookie_str
-        else:
-            cookies = input('document.cookie: ')
-        if cookies.startswith('\"') and cookies.endswith('\"'):
-            cookies = json.loads(cookies)
-        cookies = ehentai.convert_cookies(cookies)
-        cookiejar.update(cookies)
-        open(args.cookie_file_path, 'w').write(repr(cookiejar))
-    return cookiejar
-
-
-if __name__ == '__main__':
-    from sys import argv
-    main(argv[1:])
