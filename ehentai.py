@@ -127,8 +127,12 @@ def login(username: str, password: str):
     response = requests.post(base_url, params=params, data=data)
     html = response.text
     doc = parse_html(html)
-    error = doc.find('.//body/table/tbody/tr/td/table/tbody/tr/td/table[3]/tbody/tr/td/table/tbody/tr[2]/td/div/div/div/div[3]/div[2]/span').text
+    try:
+        error = doc.find('.//body/table/tbody/tr/td/table/tbody/tr/td/table[3]/tbody/tr/td/table/tbody/tr[2]/td/div/div/div/div[3]/div[2]/span').text
+    except AttributeError:
+        error = None
     return response.cookies, error
+
 
 def convert_cookies(cookie_str):
     '''Convert javascript's document.cookie to a dict.'''

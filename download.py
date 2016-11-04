@@ -6,8 +6,8 @@ import asyncio
 
 
 async def download(session, gallery_url, output_dir='./Images/', force_origin=False,
-                   page_fetcher_num=1, page_loader_num=2, image_downloader_num=20,
-                   download_timeout=2.0):
+                   page_fetcher_num=1, page_loader_num=2, image_downloader_num=10,
+                   download_timeout=5.0):
     gallery = Gallery.from_url(gallery_url)
     await gallery.load_preview(session)
 
