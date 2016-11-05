@@ -5,14 +5,14 @@ import os
 import asyncio
 
 
-def patch():
+def patch_yarl_quote():
     import yarl
     old_quote = yarl.quote
     def quote(s, safe='', **kwargs):
-        return old_quote(s, safe=safe + '=', **kwargs)
+        return old_quote(s, safe=safe+'=', **kwargs)
     yarl.quote = quote
 
-patch()
+patch_yarl_quote()
 
 
 async def download(session, gallery_url, output_dir='./Images/', force_origin=False,
@@ -47,8 +47,7 @@ async def download(session, gallery_url, output_dir='./Images/', force_origin=Fa
             await unloaded_pages.put(page)
 
         try:
-            data = await ehentai.fetch_data(session, image_url, timeout=download_timeout,
-                                            headers={'Cookie': ''})
+            data = await ehentai.fetch_data(session, image_url, timeout=download_timeout)
         except asyncio.TimeoutError:
             await failed()
         except aiohttp.BadStatusLine:
