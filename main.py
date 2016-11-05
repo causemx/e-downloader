@@ -80,5 +80,6 @@ def do_download(args):
 
 
 if __name__ == '__main__':
+    main('download --download-timeout 60 https://exhentai.org/g/993182/d8eb7d3bc7/'.split())
     from sys import argv
     main(argv[1:])

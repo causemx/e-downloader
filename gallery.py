@@ -103,7 +103,7 @@ class Gallery:
     def parse_url(url):
         url = urllib.parse.urlparse(url)
         if url.query:
-            query = urllib.parse.parse_qs(query)
+            query = urllib.parse.parse_qs(url.query)
             page = query.get('p', 0)
         else:
             page = 0

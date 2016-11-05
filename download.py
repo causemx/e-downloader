@@ -5,9 +5,19 @@ import os
 import asyncio
 
 
+def patch():
+    import yarl
+    old_quote = yarl.quote
+    def quote(s, safe='', **kwargs):
+        return old_quote(s, safe=safe + '=', **kwargs)
+    yarl.quote = quote
+
+patch()
+
+
 async def download(session, gallery_url, output_dir='./Images/', force_origin=False,
                    page_fetcher_num=1, page_loader_num=2, image_downloader_num=10,
-                   download_timeout=5.0):
+                   download_timeout=7.0):
     gallery = Gallery.from_url(gallery_url)
     await gallery.load_preview(session)
 
@@ -31,23 +41,26 @@ async def download(session, gallery_url, output_dir='./Images/', force_origin=Fa
         page = await loaded_pages.get()
         image_url = page.origin_url if force_origin else page.img_url
         print('downloading:', page.page)
+
+        async def failed():
+            print('failed:', page.page)
+            await unloaded_pages.put(page)
+
         try:
-            data = await ehentai.fetch_data(session, image_url, timeout=download_timeout)
+            data = await ehentai.fetch_data(session, image_url, timeout=download_timeout,
+                                            headers={'Cookie': ''})
         except asyncio.TimeoutError:
-            await unloaded_pages.put(page)
+            await failed()
         except aiohttp.BadStatusLine:
-            await unloaded_pages.put(page)
+            await failed()
         except aiohttp.DisconnectedError:
-            await unloaded_pages.put(page)
+            await failed()
         except aiohttp.ClientResponseError:
-            await unloaded_pages.put(page)
+            await failed()
         except aiohttp.ClientOSError:
-            await unloaded_pages.put(page)
-        except:
-            print('falied:', page.page)
-            raise
+            await failed()
         else:
-            print('downloaded:', page.page)
+            print('done:', page.page)
             open(target_dir + page.img_url.split('/')[-1], 'wb').write(data)
         loaded_pages.task_done()
 
