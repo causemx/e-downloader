@@ -35,6 +35,8 @@ async def fetch_data(session, url, timeout=10.0, **kwargs):
 
     data = b''
     async with session.get(url, **kwargs) as r:
+        if r.status != 200:
+            raise aiohttp.ClientResponseError('Bad status code.')
         with aiohttp.Timeout(timeout):
             chunk = await r.content.read(DATA_CHUNK_SIZE)
         while chunk:

@@ -76,7 +76,7 @@ def do_download(args):
     with aiohttp.ClientSession(loop=loop, connector=connector, cookies=args.cookiejar.get_dict()) as session:
         loop.run_until_complete(download.download(session, args.gallery_url, download_timeout=args.download_timeout))
 
-    args.cookiejar.update(session.cookie_jar._cookies)
+    #args.cookiejar.update(session.cookie_jar._cookies)
 
 
 if __name__ == '__main__':
