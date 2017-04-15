@@ -53,13 +53,7 @@ async def fetch_data_ensure(session, url, timeout=10.0, retry_intervial=0.5, **k
             data = await fetch_data(session, url, timeout, **kwargs)
         except asyncio.TimeoutError:
             pass
-        except aiohttp.BadStatusLine:
-            pass
-        except aiohttp.DisconnectedError:
-            pass
-        except aiohttp.ClientResponseError:
-            pass
-        except aiohttp.ClientOSError:
+        except aiohttp.ClientError:
             pass
         else:
             break
@@ -98,13 +92,7 @@ async def fetch_text_ensure(session, url, timeout=10.0, encoding=None, retry_int
             text = await fetch_text(session, url, timeout, encoding, **kwargs)
         except asyncio.TimeoutError:
             pass
-        except aiohttp.BadStatusLine:
-            pass
-        except aiohttp.DisconnectedError:
-            pass
-        except aiohttp.ClientResponseError:
-            pass
-        except aiohttp.ClientOSError:
+        except aiohttp.ClientError:
             pass
         else:
             break
