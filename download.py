@@ -3,6 +3,7 @@ import ehentai
 import aiohttp
 import os
 import asyncio
+import re
 
 
 def patch_yarl_quote():
@@ -13,6 +14,12 @@ def patch_yarl_quote():
     yarl.quote = quote
 
 patch_yarl_quote()
+
+
+def path_escape(path):
+    escape_charset = ['/', ':', '*', '\\', '&', '?']
+    escape_pattern = re.compile('|'.join((re.escape(x) for x in escape_charset)))
+    return escape_pattern.sub('_', path)
 
 
 async def download(session, gallery_url, output_dir='./Images/', force_origin=False,
@@ -60,8 +67,9 @@ async def download(session, gallery_url, output_dir='./Images/', force_origin=Fa
             await failed()
         else:
             print('done:', page.page)
-            open(target_dir + page.img_url.split('/')[-1], 'wb').write(data)
+            open(target_dir + path_escape(page.img_url.split('/')[-1]), 'wb').write(data)
         loaded_pages.task_done()
+
 
     async def do_forever(job):
         while True:
@@ -73,7 +81,7 @@ async def download(session, gallery_url, output_dir='./Images/', force_origin=Fa
                 import traceback
                 traceback.print_exc()
 
-    target_dir = output_dir + gallery.name + '/'
+    target_dir = output_dir + path_escape(gallery.name) + '/'
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
 
