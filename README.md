@@ -5,6 +5,5 @@ See `python main.py --help` for details.
 
 ## Dependency:
 * python3.5+
-* requests
+* aiohttp
 * html5lib
-* asyncio
