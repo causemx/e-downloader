@@ -29,10 +29,10 @@ def main(args):
                                  help='timeout of download connections')
     parser_download.set_defaults(func=do_download)
 
-    parser_cookie_export = subparsers.add_parser('cookie-export', help='export cookies')
+    parser_cookie_export = subparsers.add_parser('cookie-export', help='export cookies to stdout')
     parser_cookie_export.set_defaults(func=do_cookie_export)
 
-    parser_cookie_update = subparsers.add_parser('cookie-update', help='update cookies')
+    parser_cookie_update = subparsers.add_parser('cookie-update', help='import and update cookies from stdin')
     parser_cookie_update.set_defaults(func=do_cookie_update)
 
     args = parser.parse_args(args)
