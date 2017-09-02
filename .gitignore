@@ -1,6 +1,6 @@
 *.pyproj
 .vs/
-cookies.txt
+cookies.dat
 __pycache__/
 Images/
 *.sln
