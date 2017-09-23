@@ -20,7 +20,7 @@ class NotLoadedError(BaseException):
 
 
 class Gallery:
-    def __init__(self, gallery_id, gallery_token, base_url='http://g.e-hentai.org'):
+    def __init__(self, gallery_id, gallery_token, base_url='https://g.e-hentai.org'):
         self.gallery_id = gallery_id
         self.token = gallery_token
         self.base_url = base_url
@@ -130,19 +130,29 @@ class Gallery:
     def uploader(self):
         return self.parsed_document.find('.//div[@id="gdn"]/a').text
 
-    @property
-    def tags(self):
+    def get_tags(self, xpath):
         tag_lists = self.parsed_document.find('.//div[@id="taglist"]')
-        tag_list = [i.attrib['id'].split(':') for i in tag_lists.findall('.//div[@class="gt"]')]
-        tag_map = {td_namespace[3:]: tag_name for td_namespace, tag_name in tag_list}
+        tag_list = [i.attrib['id'].split(':') for i in tag_lists.findall(xpath)]
+        tag_map = {}
+        for tag in tag_list:
+            tag[0] = tag[0][3:]
+            if ':' in tag:
+                namespace, name = tag.split(':')
+                if namespace in tag_map:
+                    tag_map[namespace].append(name)
+                else:
+                    tag_map[namespace] = [name]
+            else:
+                tag_map[tag[0]] = tag[0]
         return tag_map
 
     @property
+    def tags(self):
+        return self.get_tags('.//div[@class="gt"]')
+
+    @property
     def downvoted_tags(self):
-        tag_lists = self.parsed_document.find('.//div[@id="taglist"]')
-        tag_list = [i.attrib['id'].split(':') for i in tag_lists.findall('.//div[@class="gtl"]')]
-        tag_map = {td_namespace[3:]: tag_name for td_namespace, tag_name in tag_list}
-        return tag_map
+        return self.get_tags('.//div[@class="gtl"]')
 
     @property
     def average_rating(self):
