@@ -4,6 +4,8 @@ import aiohttp
 import os
 import asyncio
 import re
+import traceback
+import math
 
 
 def patch_yarl_quote():
@@ -22,44 +24,55 @@ def path_escape(path):
     return escape_pattern.sub('_', path)
 
 
-async def download(session, gallery_url, output_dir='./Images/', force_origin=False,
-                   page_fetcher_num=1, page_loader_num=2, image_downloader_num=10,
-                   download_timeout=7.0):
-    gallery = Gallery.from_url(gallery_url)
-    await gallery.load_preview(session)
+async def do_forever(job):
+    while True:
+        try:
+            await job()
+        except asyncio.CancelledError:
+            break
+        except:
+            traceback.print_exc()
 
-    planned_pages = asyncio.queues.Queue()
-    unloaded_pages = asyncio.queues.Queue()
-    loaded_pages = asyncio.queues.Queue()
 
-    async def get_page():
-        page_id = await planned_pages.get()
-        page = await gallery.get_page(session, page_id)
-        await unloaded_pages.put(page)
-        planned_pages.task_done()
+class Downloader:
+    def __init__(self, session, gallery_url, force_origin=False, page_fetcher_num=1,
+                 page_loader_num=2, image_downloader_num=10, download_timeout=7.0):
+        self.session = session
+        self.download_timeout = download_timeout
+        self.force_origin = force_origin
+        self.page_fetcher_num = page_fetcher_num
+        self.page_loader_num = page_loader_num
+        self.image_downloader_num = image_downloader_num
+        self.gallery = Gallery.from_url(gallery_url)
 
-    async def load_page():
-        page = await unloaded_pages.get()
-        await page.load(session)
-        await loaded_pages.put(page)
-        unloaded_pages.task_done()
+        self.planned_pages = asyncio.queues.Queue()
+        self.unloaded_pages = asyncio.queues.Queue()
+        self.loaded_pages = asyncio.queues.Queue()
 
-    async def download_image():
-        page = await loaded_pages.get()
-        image_url = page.origin_url if force_origin else page.img_url
+    async def get_page(self):
+        page_id = await self.planned_pages.get()
+        page = await self.gallery.get_page(self.session, page_id)
+        await self.unloaded_pages.put(page)
+        self.planned_pages.task_done()
+
+    async def load_page(self):
+        page = await self.unloaded_pages.get()
+        await page.load(self.session)
+        await self.loaded_pages.put(page)
+        self.unloaded_pages.task_done()
+
+    async def download_image(self):
+        page = await self.loaded_pages.get()
+        image_url = page.origin_url if self.force_origin else page.img_url
         print('downloading:', page.page)
 
         async def failed():
             print('failed:', page.page)
-            await unloaded_pages.put(page)
+            await self.unloaded_pages.put(page)
 
         try:
-            data = await ehentai.fetch_data(session, image_url, timeout=download_timeout)
+            data = await ehentai.fetch_data(self.session, image_url, timeout=self.download_timeout)
         except asyncio.TimeoutError:
-            await failed()
-        except aiohttp.BadStatusLine:
-            await failed()
-        except aiohttp.DisconnectedError:
             await failed()
         except aiohttp.ClientResponseError:
             await failed()
@@ -67,36 +80,42 @@ async def download(session, gallery_url, output_dir='./Images/', force_origin=Fa
             await failed()
         else:
             print('done:', page.page)
-            open(target_dir + path_escape(page.img_url.split('/')[-1]), 'wb').write(data)
-        loaded_pages.task_done()
+            with self.open_output_file(page) as f:
+                f.write(data)
+        self.loaded_pages.task_done()
+
+    async def start(self):
+        if not self.gallery.loaded:
+            await self.gallery.load_preview(self.session)
+
+        for i in range(self.gallery.page_count):
+            await self.planned_pages.put(i+1)
+
+        self.workers = workers = [asyncio.ensure_future(do_forever(self.get_page)) for __ in range(self.page_fetcher_num)]
+        workers += [asyncio.ensure_future(do_forever(self.load_page)) for __ in range(self.page_loader_num)]
+        workers += [asyncio.ensure_future(do_forever(self.download_image)) for __ in range(self.image_downloader_num)]
+
+    async def join(self):
+        await self.planned_pages.join()
+        # await unloaded_pages and loaded_pages
+        while self.unloaded_pages.qsize() != 0 or self.unloaded_pages._unfinished_tasks != 0 or self.loaded_pages.qsize() != 0 or self.loaded_pages._unfinished_tasks != 0:
+            await self.unloaded_pages.join()
+            await self.loaded_pages.join()
+
+        for worker in self.workers:
+            worker.cancel()
+
+    def open_output_file(self, page):
+        filled_num = str(page.page).zfill(int(math.log10(self.gallery.page_count)) + 1)
+        path = './Images/{}/{}-{}'.format(path_escape(self.gallery.name), filled_num, path_escape(page.file_name))
+        return open(path, 'wb')
 
 
-    async def do_forever(job):
-        while True:
-            try:
-                await job()
-            except asyncio.CancelledError:
-                break
-            except:
-                import traceback
-                traceback.print_exc()
-
-    target_dir = output_dir + path_escape(gallery.name) + '/'
-    if not os.path.exists(target_dir):
-        os.makedirs(target_dir)
-
-    for i in range(gallery.page_count):
-        await planned_pages.put(i+1)
-
-    workers = [asyncio.ensure_future(do_forever(get_page)) for __ in range(page_fetcher_num)]
-    workers += [asyncio.ensure_future(do_forever(load_page)) for __ in range(page_loader_num)]
-    workers += [asyncio.ensure_future(do_forever(download_image)) for __ in range(image_downloader_num)]
-
-    await planned_pages.join()
-    # await unloaded_pages and loaded_pages
-    while unloaded_pages.qsize() != 0 or unloaded_pages._unfinished_tasks != 0 or loaded_pages.qsize() != 0 or loaded_pages._unfinished_tasks != 0:
-        await unloaded_pages.join()
-        await loaded_pages.join()
-
-    for worker in workers:
-        worker.cancel()
+async def download(*args, **kwargs):
+    downloader = Downloader(*args, **kwargs)
+    await downloader.gallery.load_preview(downloader.session)
+    output_dir = './Images/' + path_escape(downloader.gallery.name)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    await downloader.start()
+    await downloader.join()
