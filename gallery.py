@@ -162,7 +162,7 @@ class Gallery:
 
 
 class GalleryPage:
-    def __init__(self, gallery_id, page_token, page, base_url='http://g.e-hentai.org', reload_info=''):
+    def __init__(self, gallery_id, page_token, page, base_url='http://e-hentai.org', reload_info=''):
         self.gallery_id = gallery_id
         self.token = page_token
         self.page = page

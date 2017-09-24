@@ -1,12 +1,12 @@
-import download
 import asyncio
 import aiohttp
-import ehentai
 import os
 import argparse
 import getpass
 from http.cookies import SimpleCookie
 import sys
+import ehentai
+import download
 
 
 def main(args):
