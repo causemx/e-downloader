@@ -1,7 +1,10 @@
-import math
+from collections import namedtuple
+import dateutil.parser
 from ehentai import fetch_text_ensure
 from ehentai import parse_html
 
+
+SearchResult = namedtuple('SearchResult', ['url', 'update_time'])
 
 class Searcher:
     def __init__(self, session, base_url='https://e-hentai.org'):
@@ -56,9 +59,11 @@ class Searcher:
         params = self._make_params(page)
         html = await fetch_text_ensure(self.session, self.base_url + '/', params=params)
         doc = parse_html(html)
-        results = [a.get('href') for a in doc.findall('.//a')]
-        results = [url for url in results if url.startswith(self.base_url + '/g/')]
-        return results
+        urls = [a.get('href') for a in doc.findall('.//a')]
+        urls = [url for url in urls if url.startswith(self.base_url + '/g/')]
+        update_times = [t.text for t in doc.findall('.//td[@class="itd"]') if t.text is not None]
+
+        return [SearchResult(url, dateutil.parser.parse(update_time)) for url, update_time in zip(urls, update_times)]
 
     async def __aiter__(self):
         return SearchCursor(self)
