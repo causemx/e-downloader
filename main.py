@@ -13,8 +13,6 @@ def main(args):
     parser = argparse.ArgumentParser()
     parser.add_argument('--cookie-storage', type=str, default='./cookies.dat', dest='cookie_file_path',
                         help='path of the text file that stores cookies')
-    parser.add_argument('--proxy', type=str, dest='proxy',
-                        help='http proxy to use')
 
     subparsers = parser.add_subparsers(title='command', dest='command_name')
     parser_login = subparsers.add_parser('login', help='login and save cookies')
@@ -43,11 +41,7 @@ def main(args):
     loop = asyncio.get_event_loop()
     # loop.set_debug(True)
 
-    if args.proxy:
-        connector = aiohttp.ProxyConnector(args.proxy)
-    else:
-        connector = None
-    with aiohttp.ClientSession(loop=loop, connector=connector) as session:
+    with aiohttp.ClientSession(loop=loop) as session:
         args.session = session
         prepare_cookies(args)
 
