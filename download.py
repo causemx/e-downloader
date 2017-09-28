@@ -74,9 +74,11 @@ class Downloader:
             data = await ehentai.fetch_data(self.session, image_url, timeout=self.download_timeout)
         except asyncio.TimeoutError:
             await failed()
-        except aiohttp.ClientResponseError:
+        except aiohttp.ClientError:
             await failed()
-        except aiohttp.ClientOSError:
+        except aiohttp.ServerDisconnectedError:
+            await failed()
+        except aiohttp.ServerConnectionError:
             await failed()
         else:
             print('done:', page.page)

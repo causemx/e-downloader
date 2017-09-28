@@ -33,8 +33,6 @@ async def fetch_data(session, url, timeout=10.0, **kwargs):
 
     data = b''
     async with session.get(url, **kwargs) as r:
-        if r.status != 200:
-            raise aiohttp.ClientResponseError('Bad status code.')
         with aiohttp.Timeout(timeout):
             chunk = await r.content.read(DATA_CHUNK_SIZE)
         while chunk:
@@ -52,6 +50,10 @@ async def fetch_data_ensure(session, url, timeout=10.0, retry_intervial=0.5, **k
         except asyncio.TimeoutError:
             pass
         except aiohttp.ClientError:
+            pass
+        except aiohttp.ServerDisconnectedError:
+            pass
+        except aiohttp.ServerConnectionError:
             pass
         else:
             break
@@ -91,6 +93,10 @@ async def fetch_text_ensure(session, url, timeout=10.0, encoding=None, retry_int
         except asyncio.TimeoutError:
             pass
         except aiohttp.ClientError:
+            pass
+        except aiohttp.ServerDisconnectedError:
+            pass
+        except aiohttp.ServerConnectionError:
             pass
         else:
             break
