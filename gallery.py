@@ -2,6 +2,7 @@ import asyncio
 import os
 import enum
 import urllib.parse
+import dateutil.parser
 from ehentai import fetch_text_ensure
 from ehentai import parse_html
 from ehentai import fetch_data_ensure
@@ -173,7 +174,9 @@ class Gallery:
     def average_rating(self):
         return self.parsed_document.find('.//td[@id="rating_label"]').text.split(' ')[-1]
 
-
+    @property
+    def upload_time(self):
+        return dateutil.parser.parse(self.parsed_document.find('.//tr[td="Posted:"]/td[@class="gdt2"]').text)
 
 
 class GalleryPage:
