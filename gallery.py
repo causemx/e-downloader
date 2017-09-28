@@ -1,5 +1,6 @@
 import asyncio
 import os
+import enum
 import urllib.parse
 from ehentai import fetch_text_ensure
 from ehentai import parse_html
@@ -17,6 +18,19 @@ def parse_int(s):
 
 class NotLoadedError(BaseException):
     pass
+
+
+class GalleryCatalog(enum.IntEnum):
+    doujinshi = 1
+    manga = 2
+    artistcg = 3
+    gamecg = 4
+    western = 5
+    non_h = 6
+    imageset = 7
+    cosplay = 8
+    asianporn = 9
+    misc = 10
 
 
 class Gallery:
@@ -124,7 +138,8 @@ class Gallery:
 
     @property
     def catalog(self):
-        return self.parsed_document.find('.//img[@class="ic"]').attrib['alt']
+        value = self.parsed_document.find('.//img[@class="ic"]').attrib['alt']
+        return GalleryCatalog[value.replace('-', '_')]
 
     @property
     def uploader(self):
@@ -156,7 +171,7 @@ class Gallery:
 
     @property
     def average_rating(self):
-        return self.parsed_document.find('.//td[@id="rating_label"]').text
+        return self.parsed_document.find('.//td[@id="rating_label"]').text.split(' ')[-1]
 
 
 
