@@ -5,6 +5,9 @@ import argparse
 import getpass
 from http.cookies import SimpleCookie
 import sys
+import logging
+logger = logging.getLogger('e-downloader')
+
 import ehentai
 import download
 
@@ -92,8 +95,19 @@ async def do_cookie_update(args):
             args.session.cookie_jar.update_cookies(cookie)
 
 
+def setup_logger(logger):
+    stream_handler = logging.StreamHandler()
+    stream_formatter = logging.Formatter('%(asctime)s - %(message)s')
+    stream_handler.setFormatter(stream_formatter)
+    stream_handler.setLevel(logging.DEBUG)
+    logger.addHandler(stream_handler)
+    logger.setLevel(logging.DEBUG)
+    logger.info('stream logger added')
+
+
 if __name__ == '__main__':
     from sys import argv, exit
+    setup_logger(logger)
     error_code = main(argv[1:])
     if error_code != 0:
         exit(error_code)

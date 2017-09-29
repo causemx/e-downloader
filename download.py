@@ -1,12 +1,14 @@
-from gallery import Gallery
-import ehentai
-import aiohttp
 import os
 import asyncio
 import re
 import traceback
 import math
+import logging
+logger = logging.getLogger('e-downloader.download')
 
+from gallery import Gallery
+import ehentai
+import aiohttp
 
 def patch_yarl_quote():
     import yarl
@@ -31,7 +33,7 @@ async def do_forever(job):
         except asyncio.CancelledError:
             break
         except:
-            traceback.print_exc()
+            logger.error(traceback.format_exc())
 
 
 class Downloader:
@@ -64,10 +66,10 @@ class Downloader:
     async def download_image(self):
         page = await self.loaded_pages.get()
         image_url = page.origin_url if self.force_origin else page.img_url
-        print('downloading:', page.page)
+        logger.debug('downloading: {}/{}'.format(self.gallery.gallery_id, page.page))
 
         async def failed():
-            print('failed:', page.page)
+            logger.debug('failed: {}/{}'.format(self.gallery.gallery_id, page.page))
             await self.unloaded_pages.put(page)
 
         try:
@@ -81,7 +83,7 @@ class Downloader:
         except aiohttp.ServerConnectionError:
             await failed()
         else:
-            print('done:', page.page)
+            logger.debug('done: {}/{}'.format(self.gallery.gallery_id, page.page))
             with self.open_output_file(page) as f:
                 f.write(data)
         self.loaded_pages.task_done()
