@@ -84,8 +84,7 @@ class Downloader:
             await failed()
         else:
             logger.debug('done: {}/{}'.format(self.gallery.gallery_id, page.page))
-            with self.open_output_file(page) as f:
-                f.write(data)
+            self.write_image_file(page, data)
         self.loaded_pages.task_done()
 
     async def start(self):
@@ -109,10 +108,11 @@ class Downloader:
         for worker in self.workers:
             worker.cancel()
 
-    def open_output_file(self, page):
+    def write_image_file(self, page, data):
         filled_num = str(page.page).zfill(int(math.log10(self.gallery.page_count)) + 1)
         path = './Images/{}/{}-{}'.format(path_escape(self.gallery.name), filled_num, path_escape(page.file_name))
-        return open(path, 'wb')
+        with open(path, 'wb') as f:
+            f.write(data)
 
 
 async def download(*args, **kwargs):
