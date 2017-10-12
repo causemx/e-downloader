@@ -148,10 +148,12 @@ class Gallery:
 
     def get_tags(self, xpath):
         tag_lists = self.parsed_document.find('.//div[@id="taglist"]')
-        tag_list = [i.attrib['id'].split(':') for i in tag_lists.findall(xpath)]
+        tag_list = [i.attrib['id'] for i in tag_lists.findall(xpath)]
         tag_map = {}
         for tag in tag_list:
-            tag[0] = tag[0][3:]
+            if not tag.startswith('td_'):
+                continue
+            tag = tag[3:]
             if ':' in tag:
                 namespace, name = tag.split(':')
                 if namespace in tag_map:
@@ -159,7 +161,7 @@ class Gallery:
                 else:
                     tag_map[namespace] = [name]
             else:
-                tag_map[tag[0]] = tag[0]
+                tag_map[tag] = tag
         return tag_map
 
     @property
