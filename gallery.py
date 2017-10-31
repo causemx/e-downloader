@@ -52,7 +52,7 @@ class Gallery:
     async def load_preview(self, session, preview_page=0):
         url = self.get_preview_page_url(preview_page)
         self.raw_html = html = await fetch_text_ensure(session, url)
-        if '<title>Gallery Not Available - E-Hentai Galleries</title>' in html:
+        if '<title>Gallery Not Available - ' in html:
             raise BadGalleryError()
 
         self.parsed_document = doc = parse_html(html)
