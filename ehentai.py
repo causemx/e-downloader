@@ -1,5 +1,6 @@
 import asyncio
 import aiohttp
+import async_timeout
 import html5lib
 import xml.etree.ElementTree as ET
 import copy
@@ -33,10 +34,10 @@ async def fetch_data(session, url, timeout=10.0, **kwargs):
 
     data = b''
     async with session.get(url, **kwargs) as r:
-        with aiohttp.Timeout(timeout):
+        with async_timeout.timeout(timeout):
             chunk = await r.content.read(DATA_CHUNK_SIZE)
         while chunk:
-            with aiohttp.Timeout(timeout):
+            with async_timeout.timeout(timeout):
                 data += chunk
                 chunk = await r.content.read(DATA_CHUNK_SIZE)
     return data
@@ -65,10 +66,10 @@ async def fetch_text(session, url, timeout=10.0, encoding=None, **kwargs):
 
     data = b''
     async with session.get(url, **kwargs) as r:
-        with aiohttp.Timeout(timeout):
+        with async_timeout.timeout(timeout):
             chunk = await r.content.read(DATA_CHUNK_SIZE)
         while chunk:
-            with aiohttp.Timeout(timeout):
+            with async_timeout.timeout(timeout):
                 data += chunk
                 chunk = await r.content.read(DATA_CHUNK_SIZE)
     content_type = r.headers.get('Content-Type', '')

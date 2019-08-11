@@ -71,7 +71,7 @@ class Gallery:
         if preview_end != self.page_count:
             self.preview_range = preview_end - preview_beg + 1
 
-        imgs = doc.findall('.//div[@id="gdt"]/div/div/a')
+        imgs = doc.findall('.//div[@id="gdt"]/div/a')
         page_urls = [img.attrib['href'] for img in imgs]
         pages = [GalleryPage.from_url(url) for url in page_urls]
 

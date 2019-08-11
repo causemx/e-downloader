@@ -44,14 +44,15 @@ def main(args):
     loop = asyncio.get_event_loop()
     # loop.set_debug(True)
 
-    with aiohttp.ClientSession(loop=loop) as session:
-        args.session = session
-        prepare_cookies(args)
+    async def run():
+        async with aiohttp.ClientSession(loop=loop) as session:
+            args.session = session
+            prepare_cookies(args)
+            await args.func(args)
 
-        loop.run_until_complete(args.func(args))
+    loop.run_until_complete(run())
 
-        save_cookies(args)
-        del args.session
+    save_cookies(args)
 
     return 0
 

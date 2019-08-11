@@ -10,6 +10,7 @@ from gallery import Gallery
 import ehentai
 import aiohttp
 
+'''
 def patch_yarl_quote():
     import yarl
     old_quote = yarl.quote
@@ -18,6 +19,7 @@ def patch_yarl_quote():
     yarl.quote = quote
 
 patch_yarl_quote()
+'''
 
 
 def path_escape(path):
