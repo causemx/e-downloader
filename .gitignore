@@ -6,3 +6,5 @@ Images/
 *.sln
 proxychains.conf
 .idea/
+bot.sqlite3
+botconfig.py
