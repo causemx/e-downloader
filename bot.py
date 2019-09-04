@@ -3,6 +3,7 @@ import re
 import io
 import asyncio
 import time
+import os
 
 import aiohttp
 from aiogram import Bot, Dispatcher, executor, types
@@ -56,7 +57,10 @@ def set_group_enabled(chat: types.Chat, enabled: bool):
             )
 
 # Initialize bot and dispatcher
-bot = Bot(token=config.API_TOKEN)
+proxy_env = os.environ.get('https_proxy')
+if proxy_env is None:
+    proxy_env = os.environ.get('HTTPS_PROXY')
+bot = Bot(token=config.API_TOKEN, proxy=proxy_env)
 dp = Dispatcher(bot)
 
 gallery_url_pattern = re.compile(r'(https?://(exhentai|e-hentai)\.org/g/\d+/[a-z0-9]+)')
@@ -124,20 +128,23 @@ async def send_gallery_info(src_message: types.Message, gallery: Gallery):
         if not gallery.loaded:
             await gallery.load_preview(session)
 
-        title = gallery.name
         tags = '\n'.join(
-            '{}: {}'.format(namespace, ', '.join(process_tag(tag) for tag in tag_list))
+            '<b>{}</b>: {}'.format(
+                namespace.capitalize(),
+                ' <b>|</b> '.join(process_tag(tag) for tag in tag_list)
+            )
             for namespace, tag_list in gallery.all_tags.items()
         )
+        title = '<a href="{}/g/{}/{}">{}</a>'.format(gallery.base_url, gallery.gallery_id, gallery.token, gallery.name)
         desc = '{}\n{}'.format(title, tags)
-        first_reply = await src_message.reply(desc)
+        first_reply = await src_message.reply(desc, parse_mode=types.ParseMode.HTML)
 
         first_page = await gallery.get_page(session, 1)
         await first_page.load(session)
         resp = await session.get(first_page.img_url)
         preface_img = await resp.read()
 
-    await src_message.reply_photo(io.BytesIO(preface_img), desc)
+    await src_message.reply_photo(io.BytesIO(preface_img), desc, parse_mode=types.ParseMode.HTML)
     await first_reply.delete()
 
 
@@ -146,7 +153,7 @@ def is_group_chat(chat: types.Chat) -> bool:
 
 
 def process_tag(tag: str) -> str:
-    return ' '.join(word.capitalize() for word in tag.split('_'))
+    return tag.replace('_', ' ')
 
 
 if __name__ == '__main__':
