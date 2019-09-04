@@ -157,6 +157,7 @@ class Gallery:
         tag_lists = self.parsed_document.find('.//div[@id="taglist"]')
         tag_list = [i.attrib['id'] for i in tag_lists.findall(xpath)]
         tag_map = {}
+        misc_tags = []
         for tag in tag_list:
             if not tag.startswith('td_'):
                 continue
@@ -168,7 +169,9 @@ class Gallery:
                 else:
                     tag_map[namespace] = [name]
             else:
-                tag_map[tag] = tag
+                misc_tags.append(tag)
+        if misc_tags:
+            tag_map['misc'] = misc_tags
         return tag_map
 
     @property
@@ -178,6 +181,16 @@ class Gallery:
     @property
     def downvoted_tags(self):
         return self.get_tags('.//div[@class="gtl"]')
+
+    @property
+    def all_tags(self):
+        result = self.tags
+        for namespace, tag_list in self.downvoted_tags.items():
+            if namespace in result:
+                result[namespace] += tag_list
+            else:
+                result[namespace] = tag_list
+        return result
 
     @property
     def average_rating(self):
